@@ -60,7 +60,7 @@ jobs:
   # ═══════════════════════════════════════════════════════════
   
   # גוב 0: אתחול - Workspace Isolation וקריאת State
-  00-init:
+  init:
     name: "🚀 אתחול סביבה"
     runs-on: ubuntu-latest
     outputs:
@@ -141,7 +141,7 @@ jobs:
   # ═══════════════════════════════════════════════════════════
   # גוב 1: Dynamic Tool Selection Loop
   # ═══════════════════════════════════════════════════════════
-  01-dynamic-execution:
+  dynamic_execution:
     name: "⚡ ביצוע דינמי"
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -333,18 +333,18 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: state-checkpoint-${{ needs.00-init.outputs.task_id }}
+          name: state-checkpoint
           path: /workspace/state.json
           retention-days: 7
 
   # ═══════════════════════════════════════════════════════════
   # גוב 2: Self-Healing - Diagnostic Routine
   # ═══════════════════════════════════════════════════════════
-  02-self-healing:
+  self_healing:
     name: "🔧 תיקון עצמי"
     runs-on: ubuntu-latest
     needs: 01-dynamic-execution
-    if: needs.01-dynamic-execution.outputs.success == 'false'
+    if: needs.dynamic_execution.outputs.success == 'false'
     outputs:
       diagnosis: ${{ steps.diagnose.outputs.diagnosis }}
       repair_status: ${{ steps.repair.outputs.status }}
@@ -352,7 +352,7 @@ jobs:
       - name: הורדת State
         uses: actions/download-artifact@v4
         with:
-          name: state-checkpoint-${{ needs.00-init.outputs.task_id }}
+          name: state-checkpoint
           path: /workspace
 
       - name: Diagnostic Routine
@@ -516,14 +516,14 @@ jobs:
       - name: שמירת State מתוקן
         uses: actions/upload-artifact@v4
         with:
-          name: state-repaired-${{ needs.00-init.outputs.task_id }}
+          name: state-repaired
           path: /workspace/state.json
           retention-days: 7
 
   # ═══════════════════════════════════════════════════════════
   # גוב 3: Self-Evaluation & Loop Decision
   # ═══════════════════════════════════════════════════════════
-  03-evaluate:
+  evaluate:
     name: "📊 הערכה עצמית"
     runs-on: ubuntu-latest
     needs: [00-init, 01-dynamic-execution, 02-self-healing]
@@ -535,15 +535,15 @@ jobs:
       - name: הורדת State
         uses: actions/download-artifact@v4
         with:
-          name: state-repaired-${{ needs.00-init.outputs.task_id }}
+          name: state-repaired
           path: /workspace
           continue-on-error: true
 
       - name: Download latest checkpoint
-        if: needs.02-self-healing.outputs.diagnosis == ''
+        if: needs.self_healing.outputs.diagnosis == ''
         uses: actions/download-artifact@v4
         with:
-          name: state-checkpoint-${{ needs.00-init.outputs.task_id }}
+          name: state-checkpoint
           path: /workspace
           continue-on-error: true
 
@@ -610,11 +610,11 @@ jobs:
   # ═══════════════════════════════════════════════════════════
   # גוב 4: Continue Loop or Complete
   # ═══════════════════════════════════════════════════════════
-  04-continue-loop:
+  continue_loop:
     name: "🔄 המשך לופ"
     runs-on: ubuntu-latest
     needs: 03-evaluate
-    if: needs.03-evaluate.outputs.should_continue == 'true'
+    if: needs.evaluate.outputs.should_continue == 'true'
     steps:
       - name: הורדת State
         uses: actions/download-artifact@v4
@@ -656,7 +656,7 @@ jobs:
   # ═══════════════════════════════════════════════════════════
   # גוב 5: Summary & Interface Sync
   # ═══════════════════════════════════════════════════════════
-  05-summary:
+  summary:
     name: "📊 סיכום"
     runs-on: ubuntu-latest
     needs: [00-init, 03-evaluate]
@@ -752,7 +752,7 @@ jobs:
         shell: python
 
       - name: העלאת תוצאות
-        if: needs.03-evaluate.outputs.task_solved == 'true'
+        if: needs.evaluate.outputs.task_solved == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: gamma-results
@@ -770,7 +770,7 @@ jobs:
             "workflow": "gamma-main.yml",
             "run_id": "${{ github.run_id }}",
             "run_number": "${{ github.run_number }}",
-            "status": "${{ needs.03-evaluate.outputs.task_solved }}",
+            "status": "${{ needs.evaluate.outputs.task_solved }}",
             "updated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           }
           EOF
