@@ -12,16 +12,6 @@ on:
         required: false
         default: "normal"
         type: string
-      max_retries:
-        description: "Max retries"
-        required: false
-        default: "3"
-        type: string
-      max_iterations:
-        description: "Max iterations"
-        required: false
-        default: "5"
-        type: string
 
 env:
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -35,21 +25,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Init State
-        run: |
-          TASK="${{ github.event.inputs.task }}"
-          TASK_ID=$(uuidgen)
-          cat > ${{ github.workspace }}/state.json << EOF
-          {
-            "task_id": "$TASK_ID",
-            "task": "$TASK",
-            "status": "running",
-            "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          }
-          EOF
-          echo "task_id=$TASK_ID" >> $GITHUB_OUTPUT
-          echo "State file created"
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -61,6 +36,32 @@ jobs:
           pip install openai tavily-python playwright requests
           python -m playwright install chromium --with-deps
           echo "✅ All dependencies installed"
+
+      - name: Initialize State via Python
+        shell: python
+        env:
+          INPUT_TASK: ${{ github.event.inputs.task }}
+          WORKSPACE: ${{ github.workspace }}
+        run: |
+          import json
+          import os
+          import uuid
+          from datetime import datetime
+
+          task = os.environ.get("INPUT_TASK", "מצב מערכת")
+          workspace = os.environ.get("WORKSPACE", ".")
+          
+          state = {
+              "task_id": str(uuid.uuid4()),
+              "task": task,
+              "status": "running",
+              "created_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+          }
+          
+          with open(os.path.join(workspace, "state.json"), "w", encoding="utf-8") as f:
+              json.dump(state, f, ensure_ascii=False, indent=2)
+          
+          print(f"✅ State file created safely with task length: {len(task)}")
 
       - name: Run Gamma Agent
         run: |
@@ -74,25 +75,17 @@ jobs:
           GITHUB_RUN_ID: ${{ github.run_id }}
 
       - name: Summary
+        if: always()
         run: |
           echo "=== GAMMA AGENT v2.0 COMPLETE ==="
           if [ -f response.txt ]; then
             echo ""
             cat response.txt
           fi
-          echo ""
-          echo "Status: $(cat state.json | python3 -c 'import sys,json; print(json.load(sys.stdin).get("status","N/A"))')"
-          echo "Type: $(cat state.json | python3 -c 'import sys,json; print(json.load(sys.stdin).get("task_type","N/A"))')"
-          echo "Tools used: $(cat state.json | python3 -c 'import sys,json; d=json.load(sys.stdin); print(", ".join(d.get("tools_used",[])) or "none")')"
-
-      - name: Upload Interface Status
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: interface-status
-          path: ${{ github.workspace }}/interface_status.json
-          retention-days: 1
-          overwrite: true
+          if [ -f state.json ]; then
+            echo ""
+            echo "Status: $(cat state.json | python3 -c 'import sys,json; print(json.load(sys.stdin).get("status","N/A"))')"
+          fi
 
       - name: Upload Results
         if: always()
@@ -103,8 +96,6 @@ jobs:
             ${{ github.workspace }}/response.txt
             ${{ github.workspace }}/state.json
             ${{ github.workspace }}/chat.log
-            ${{ github.workspace }}/before_login.png
-            ${{ github.workspace }}/after_login.png
-            ${{ github.workspace }}/browser_screenshot.png
             ${{ github.workspace }}/interface_status.json
           retention-days: 7
+          overwrite: true
