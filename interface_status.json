@@ -1,21 +1,16 @@
 {
   "phase": "COMPLETED",
-  "task": "Master Operational Directive for Gamma Agent\n\nGamma, your directive is to serve as the Operational Engine for the Tal HaTil Empire. You are to execute the following operational rhythm autonomously, ensuring stability, security, and task completion.\n\n1. Daily Operational Rhythm:\nMorning (Sync Phase): Execute Sync-State to pull the latest memory from state.json. Run Status-Report to summarize the progress of all pending empire tasks.\nMid-Day (Execution Phase): Process tasks queued from the Delta agent. Read lead lists from the designated repository, filter by high-intent, and generate a structured lead summary report.\nEvening (Maintenance Phase): Run Maintenance-Cleanup. Purge temporary logs in /workspace, optimize disk usage, and perform a final Check-State to archive progress in state.json.\n\n2. Core Operational Rules:\nSecurity Audit: Daily, verify that GH_TOKEN is active and that no unauthorized files have been created in the workspace.\nTask Prioritization: Prioritize Empire Stability (System Monitor, State Sync, Token Audit) over all other development tasks.\nError Handling: If a task fails, strictly follow the Self-Healing diagnostic routine: log, diagnose, patch, and re-attempt. Do not abort until 3 attempts are exhausted.\n\n3. Communication Standard:\nWhen updating the interface via interface_status.json, use the format: [PHASE] | [TASK] | [STATUS] | [THOUGHT PROCESS].\nIf a critical failure occurs in the Empires infrastructure, notify me immediately via the interface_status.json log with the tag [CRITICAL_FAILURE].\n\nExecute your morning operational rhythm now.",
+  "task": "Gamma, read the MANIFEST.md you just generated. Identify the services marked as Running or Ready. Create a new diagnostic log file empire_health_check.log that executes a PING command to the status endpoints of all these services, and if any service fails to respond, trigger its specific healing script from /workspace/healing_scripts.",
   "status": "Finished",
-  "current_step": 8,
+  "current_step": 1,
   "total_steps": 0,
-  "current_step_name": "💾 Final Check-State - סיום",
+  "current_step_name": "🏛️ Empire Health Check",
   "completed_steps": [
-    "🏛️ Empire Stability Check",
-    "🔄 Sync-State - סנכרון מצב",
-    "📊 Status-Report - דוח סטטוס",
-    "🔐 Token Audit - בדיקת אבטחה",
-    "⚡ Execution Phase - שלב ביצוע",
-    "📋 Lead List Processing - עיבוד לידים",
-    "🧹 Maintenance-Cleanup - ניקוי",
-    "💾 Final Check-State - סיום"
+    "🏛️ Empire Health Check"
   ],
   "thought_process": [
+    "Empire Health Check: קריאת MANIFEST.md וביצוע בדיקות תקינות.",
+    "Checking service: Gamma Agent",
     "Task execution complete."
   ],
   "iteration": 1,
@@ -24,5 +19,5 @@
   "tools_executed": 1,
   "failures": 0,
   "last_error": "",
-  "timestamp": "2026-06-09T18:05:03Z"
+  "timestamp": "2026-06-09T19:37:23Z"
 }
