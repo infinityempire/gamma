@@ -145,7 +145,7 @@ jobs:
     name: "⚡ ביצוע דינמי"
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: 00-init
+    needs: init
     outputs:
       tool_selected: ${{ steps.select_tool.outputs.tool }}
       tool_args: ${{ steps.select_tool.outputs.args }}
@@ -343,7 +343,7 @@ jobs:
   self_healing:
     name: "🔧 תיקון עצמי"
     runs-on: ubuntu-latest
-    needs: 01-dynamic-execution
+    needs: dynamic_execution
     if: needs.dynamic_execution.outputs.success == 'false'
     outputs:
       diagnosis: ${{ steps.diagnose.outputs.diagnosis }}
@@ -526,7 +526,7 @@ jobs:
   evaluate:
     name: "📊 הערכה עצמית"
     runs-on: ubuntu-latest
-    needs: [00-init, 01-dynamic-execution, 02-self-healing]
+    needs: [init, dynamic_execution, self_healing]
     outputs:
       task_solved: ${{ steps.eval.outputs.solved }}
       should_continue: ${{ steps.eval.outputs.continue }}
@@ -613,7 +613,7 @@ jobs:
   continue_loop:
     name: "🔄 המשך לופ"
     runs-on: ubuntu-latest
-    needs: 03-evaluate
+    needs: evaluate
     if: needs.evaluate.outputs.should_continue == 'true'
     steps:
       - name: הורדת State
@@ -659,7 +659,7 @@ jobs:
   summary:
     name: "📊 סיכום"
     runs-on: ubuntu-latest
-    needs: [00-init, 03-evaluate]
+    needs: [init, evaluate]
     if: always()
     outputs:
       final_status: ${{ steps.finalize.outputs.status }}
