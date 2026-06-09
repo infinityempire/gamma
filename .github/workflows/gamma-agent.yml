@@ -121,7 +121,7 @@ jobs:
       - name: Upload Initial State
         uses: actions/upload-artifact@v4
         with:
-          name: agent-state-initial
+          name: agent-state-init
           path: /workspace/state.json
           retention-days: 7
 
@@ -139,7 +139,7 @@ jobs:
       - name: Download State
         uses: actions/download-artifact@v4
         with:
-          name: agent-state-initial
+          name: agent-state-init
           path: /workspace
 
       - name: Dynamic Tool Selection
