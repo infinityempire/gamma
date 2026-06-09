@@ -891,29 +891,22 @@
                 // Helper to extract file from ZIP
                 async function extractFromZip(blob, filename) {
                     try {
-                        // Use JSZip library if available, otherwise manual parse
-                        if (typeof JSZip !== 'undefined') {
-                            const zip = await JSZip.loadAsync(blob);
-                            const file = zip.file(filename);
-                            if (file) {
-                                return await file.async('string');
-                            }
+                        console.log(`Extracting ${filename} from zip...`);
+                        const zip = await JSZip.loadAsync(blob);
+                        
+                        // Search for the file (handling potential path issues)
+                        const baseName = filename.split('/').pop();
+                        const zipEntry = Object.keys(zip.files).find(f => f === filename || f.endsWith(baseName));
+                        
+                        if (zipEntry) {
+                            const content = await zip.file(zipEntry).async('string');
+                            console.log(`Successfully extracted ${filename}`);
+                            return content;
                         } else {
-                            // Manual ZIP parsing for simple cases
-                            const buffer = await blob.arrayBuffer();
-                            const uint8 = new Uint8Array(buffer);
-                            
-                            // Find file in ZIP (simplified)
-                            // Look for filename in the ZIP
-                            const decoder = new TextDecoder();
-                            const content = decoder.decode(uint8);
-                            
-                            // Try to find the file content
-                            // This is a simplified approach
-                            return null;
+                            console.log(`${filename} not found in zip. Available files: ${Object.keys(zip.files).join(', ')}`);
                         }
                     } catch (e) {
-                        console.log('Error extracting from zip:', e);
+                        console.error('Error extracting from zip:', e);
                     }
                     return null;
                 }
