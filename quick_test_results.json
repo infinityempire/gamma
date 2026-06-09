@@ -1,0 +1,81 @@
+{
+  "tests": [
+    {
+      "name": "1. Credentials Save",
+      "status": "\u2705",
+      "response": "\u2705 **\u05e4\u05e8\u05d8\u05d9 \u05d4\u05ea\u05d7\u05d1\u05e8\u05d5\u05ea \u05e0\u05e9\u05de\u05e8\u05d5!**\n\n\ud83d\udd10 \u05e9\u05d9\u05e8\u05d5\u05ea: `github`\n\ud83d\udc64 \u05de\u05e9\u05ea\u05de\u05e9: `user`\n\ud83d\udd12 \u05e1\u05d9\u05e1\u05de\u05d4: `****`\n\n\u05d4\u05e4\u05e8\u05d8\u05d9\u05dd \u05e0\u05e9\u05de\u05e8\u05d5 \u05d1\u05e6\u05d5\u05e8\u05d4 \u05de\u05d0\u05d5\u05d1\u05d8\u05d7\u05ea \u05d5\u05d9\u05d4\u05d9\u05d5 \u05d6\u05de\u05d9\u05e0\u05d9\u05dd \u05dc\u05e9\u05d9\u05de\u05d5\u05e9 \u05d1\u05e2\u05ea\u05d9\u05d3."
+    },
+    {
+      "name": "2. Credentials List",
+      "status": "\u2705",
+      "response": "\ud83d\udd10 **\u05e4\u05e8\u05d8\u05d9 \u05d4\u05ea\u05d7\u05d1\u05e8\u05d5\u05ea \u05e9\u05de\u05d5\u05e8\u05d9\u05dd:**\n\n\u2022 **gmail**: `testuser@gmail.com` (\u05e0\u05e9\u05de\u05e8: 2026-06-09 16:30:14)\n\u2022 **github**: `user` (\u05e0\u05e9\u05de\u05e8: 2026-06-09 16:32:53)\n\n\ud83d\udca1 \u05d4\u05e1\u05d9\u05e1\u05de\u05d0\u05d5\u05ea"
+    },
+    {
+      "name": "3. Web Search",
+      "status": "\u274c",
+      "response": "\ud83d\udcca **\u05de\u05e6\u05d1 \u05d4\u05de\u05e2\u05e8\u05db\u05ea:**\n\n\u26a1 **CPU Load:** `0.28 0.14 0.05 1/299 1789`\n\n\ud83d\udcbe **\u05d6\u05d9\u05db\u05e8\u05d5\u05df:**\n```\ntotal        used        free      shared  buff/cache   available\nMe"
+    },
+    {
+      "name": "4. File Create",
+      "status": "\u2705",
+      "response": "\u2705 \u05e0\u05d5\u05e6\u05e8 \u05e7\u05d5\u05d1\u05e5 \u05d7\u05d3\u05e9!\n\n\ud83d\udcc4 \u05e9\u05dd: test.txt\n\ud83d\udcdd \u05ea\u05d5\u05db\u05df: hello\n\n\u05d4\u05e7\u05d5\u05d1\u05e5 \u05e0\u05e9\u05de\u05e8 \u05d1\u05d4\u05e6\u05dc\u05d7\u05d4! \ud83c\udf89"
+    },
+    {
+      "name": "5. File Read",
+      "status": "\u2705",
+      "response": "\ud83d\udcc4 **\u05ea\u05d5\u05db\u05df \u05d4\u05e7\u05d5\u05d1\u05e5 `test.txt`:**\n\n```\nhello\n```"
+    },
+    {
+      "name": "6. File List",
+      "status": "\u274c",
+      "response": ""
+    },
+    {
+      "name": "7. File Delete",
+      "status": "\u2705",
+      "response": "\ud83d\uddd1\ufe0f **\u05e7\u05d5\u05d1\u05e5 \u05e0\u05de\u05d7\u05e7:** `test.txt`"
+    },
+    {
+      "name": "8. Version Check",
+      "status": "\u2705",
+      "response": "\ud83d\udccb **\u05d2\u05e8\u05e1\u05ea node:**\n\n```\nv22.13.0\n```\n\n\u2705 \u05d4\u05ea\u05d5\u05db\u05e0\u05d4 \u05de\u05d5\u05ea\u05e7\u05e0\u05ea \u05d5\u05e2\u05d5\u05d1\u05d3\u05ea!"
+    },
+    {
+      "name": "9. System Monitor",
+      "status": "\u2705",
+      "response": "\ud83d\udcca **\u05de\u05e6\u05d1 \u05d4\u05de\u05e2\u05e8\u05db\u05ea:**\n\n\u26a1 **CPU Load:** `0.39 0.17 0.07 1/299 1815`\n\n\ud83d\udcbe **\u05d6\u05d9\u05db\u05e8\u05d5\u05df:**\n```\ntotal        used        free      shared  buff/cache   available\nMe"
+    },
+    {
+      "name": "10. Terminal Command",
+      "status": "\u2705",
+      "response": "\u2705 \u05e4\u05e7\u05d5\u05d3\u05d4 \u05d1\u05d5\u05e6\u05e2\u05d4!\n\n\ud83d\udce4 Output:\nubuntu"
+    },
+    {
+      "name": "11. Python Code",
+      "status": "\u2705",
+      "response": "\u2705 \u05e4\u05e7\u05d5\u05d3\u05d4 \u05d1\u05d5\u05e6\u05e2\u05d4!\n\n\ud83d\udce4 Output:\nubuntu"
+    },
+    {
+      "name": "12. Git Status",
+      "status": "\u274c",
+      "error": "Command 'cd /home/ubuntu/gamma && python3 agent.py"
+    },
+    {
+      "name": "13. Question Answer",
+      "status": "\u2705",
+      "response": "\ud83e\udd16 **\u05d0\u05e0\u05d9 \u05d2\u05d0\u05de\u05d0 - \u05e1\u05d5\u05db\u05df AI \u05d0\u05d5\u05d8\u05d5\u05e0\u05d5\u05de\u05d9 \u05de\u05ea\u05e7\u05d3\u05dd!**\n\n## \u05d9\u05db\u05d5\u05dc\u05d5\u05ea:\n\n### \ud83c\udf10 \u05d2\u05dc\u05d9\u05e9\u05d4 \u05d5\u05db\u05e0\u05d9\u05e1\u05d4 \u05dc\u05d7\u05e9\u05d1\u05d5\u05e0\u05d5\u05ea\n\ud83d\udd39 **\u05db\u05e0\u05d9\u05e1\u05d4 \u05dc\u05d7\u05e9\u05d1\u05d5\u05e0\u05d5\u05ea** - `\u05d4\u05d9\u05db\u05e0\u05e1 \u05dc-gmail`, `\u05d4\u05d9\u05db\u05e0\u05e1 \u05dc-github`\n\ud83d\udd39 **\u05e9\u05de\u05d9\u05e8\u05ea \u05e1"
+    },
+    {
+      "name": "14. Help Request",
+      "status": "\u2705",
+      "response": "\ud83c\udd98 **\u05e4\u05e7\u05d5\u05d3\u05d5\u05ea \u05d2\u05d0\u05de\u05d0 - \u05de\u05d3\u05e8\u05d9\u05da \u05de\u05dc\u05d0:**\n\n### \ud83d\udd10 \u05db\u05e0\u05d9\u05e1\u05d4 \u05dc\u05d7\u05e9\u05d1\u05d5\u05e0\u05d5\u05ea:\n\u2022 `\u05d4\u05d9\u05db\u05e0\u05e1 \u05dc-gmail` (\u05e2\u05dd \u05e4\u05e8\u05d8\u05d9\u05dd \u05e9\u05de\u05d5\u05e8\u05d9\u05dd)\n\u2022 `\u05d4\u05d9\u05db\u05e0\u05e1 \u05dc-github \u05e2\u05dd username: user password: pass`\n\u2022 `\u05e9\u05de\u05d5\u05e8 "
+    },
+    {
+      "name": "15. About Gamma",
+      "status": "\u2705",
+      "response": "\ud83e\udd16 **\u05d0\u05e0\u05d9 \u05d2\u05d0\u05de\u05d0 - \u05e1\u05d5\u05db\u05df AI \u05d0\u05d5\u05d8\u05d5\u05e0\u05d5\u05de\u05d9 \u05de\u05ea\u05e7\u05d3\u05dd!**\n\n## \u05d9\u05db\u05d5\u05dc\u05d5\u05ea:\n\n### \ud83c\udf10 \u05d2\u05dc\u05d9\u05e9\u05d4 \u05d5\u05db\u05e0\u05d9\u05e1\u05d4 \u05dc\u05d7\u05e9\u05d1\u05d5\u05e0\u05d5\u05ea\n\ud83d\udd39 **\u05db\u05e0\u05d9\u05e1\u05d4 \u05dc\u05d7\u05e9\u05d1\u05d5\u05e0\u05d5\u05ea** - `\u05d4\u05d9\u05db\u05e0\u05e1 \u05dc-gmail`, `\u05d4\u05d9\u05db\u05e0\u05e1 \u05dc-github`\n\ud83d\udd39 **\u05e9\u05de\u05d9\u05e8\u05ea \u05e1"
+    }
+  ],
+  "passed": 12,
+  "failed": 3
+}

@@ -1,0 +1,114 @@
+{
+  "timestamp": "2026-06-09 16:30:12",
+  "tests": [
+    {
+      "name": "CREDENTIALS_SAVE",
+      "status": "✅ PASSED",
+      "command": "שמור סיסמה ל-gmail: testuser@gmail.com / testpass123",
+      "response_preview": "✅ **פרטי התחברות נשמרו!**\n\n🔐 שירות: `gmail`\n👤 משתמש: `testuser@gmail.com`\n🔒 סיסמה: `***********`\n\nהפרטים נשמרו בצורה מאובטחת ויהיו זמינים לשימוש בעתיד.",
+      "exit_code": 0
+    },
+    {
+      "name": "CREDENTIALS_LIST",
+      "status": "✅ PASSED",
+      "command": "הצג סיסמאות שמורות",
+      "response_preview": "🔐 **פרטי התחברות שמורים:**\n\n• **gmail**: `testuser@gmail.com` (נשמר: 2026-06-09 16:30:14)\n\n💡 הסיסמאות מוסתרות מטעמי אבטחה.",
+      "exit_code": 0
+    },
+    {
+      "name": "WEB_SEARCH",
+      "status": "✅ PASSED",
+      "command": "חפש על Manus AI",
+      "response_preview": "🔍 **תוצאות חיפוש עבור:** על Manus AI\n\n📝 **Manus (AI agent):**\nManus is an autonomous artificial intelligence agent developed by Butterfly Effect, a company founded in China and based in Singapore.\n",
+      "exit_code": 0
+    },
+    {
+      "name": "FILE_CREATE",
+      "status": "✅ PASSED",
+      "command": "צור קובץ בשם gamma_test.txt עם זה בדיקה של גאמא",
+      "response_preview": "✅ נוצר קובץ חדש!\n\n📄 שם: gamma_test.txt\n📝 תוכן: זה בדיקה של גאמא\n\nהקובץ נשמר בהצלחה! 🎉",
+      "exit_code": 0
+    },
+    {
+      "name": "FILE_READ",
+      "status": "✅ PASSED",
+      "command": "קרא קובץ gamma_test.txt",
+      "response_preview": "📄 **תוכן הקובץ `gamma_test.txt`:**\n\n```\nזה בדיקה של גאמא\n```",
+      "exit_code": 0
+    },
+    {
+      "name": "VERSION_CHECK",
+      "status": "✅ PASSED",
+      "command": "מה גרסת python",
+      "response_preview": "📋 **גרסת python:**\n\n```\nPython 3.12.3\n```\n\n✅ התוכנה מותקנת ועובדת!",
+      "exit_code": 0
+    },
+    {
+      "name": "SYSTEM_MONITOR",
+      "status": "✅ PASSED",
+      "command": "מצב מערכת",
+      "response_preview": "📊 **מצב המערכת:**\n\n⚡ **CPU Load:** `0.42 0.12 0.04 1/295 1598`\n\n💾 **זיכרון:**\n```\ntotal        used        free      shared  buff/cache   available\nMem:           3.8Gi       821Mi       2.6Gi        11Mi       888Mi       3.0Gi\nSwap:          2.0Gi ",
+      "exit_code": 0
+    },
+    {
+      "name": "CODE_PYTHON",
+      "status": "✅ PASSED",
+      "command": "הרץ קוד Python:\n```python\nx = 5\ny = 10\nprint(f\"Result: {x + y}\")\n```",
+      "response_preview": "📊 **מצב המערכת:**\n\n⚡ **CPU Load:** `0.42 0.12 0.04 1/295 1598`\n\n💾 **זיכרון:**\n```\ntotal        used        free      shared  buff/cache   available\nMem:           3.8Gi       821Mi       2.6Gi        11Mi       888Mi       3.0Gi\nSwap:          2.0Gi ",
+      "exit_code": 1
+    },
+    {
+      "name": "TERMINAL_CMD",
+      "status": "✅ PASSED",
+      "command": "run echo 'Gamma Agent v2.0 Test'",
+      "response_preview": "✅ פקודה בוצעה!\n\n📤 Output:\ngamma agent v2.0 test",
+      "exit_code": 0
+    },
+    {
+      "name": "GIT_STATUS",
+      "status": "⏱️ TIMEOUT",
+      "command": "מה קורה בgit"
+    },
+    {
+      "name": "QUESTION_ANSWER",
+      "status": "✅ PASSED",
+      "command": "מה אתה יודע לעשות?",
+      "response_preview": "🤖 **אני גאמא - סוכן AI אוטונומי מתקדם!**\n\n## יכולות:\n\n### 🌐 גלישה וכניסה לחשבונות\n🔹 **כניסה לחשבונות** - `היכנס ל-gmail`, `היכנס ל-github`\n🔹 **שמירת סיסמאות** - `שמור סיסמה ל-[שירות]: [משתמש] / [סיסמה]`\n🔹 **פעולות בדפדפן** - `פתח https://example.com`",
+      "exit_code": 0
+    },
+    {
+      "name": "HELP_REQUEST",
+      "status": "✅ PASSED",
+      "command": "עזור לי",
+      "response_preview": "🆘 **פקודות גאמא - מדריך מלא:**\n\n### 🔐 כניסה לחשבונות:\n• `היכנס ל-gmail` (עם פרטים שמורים)\n• `היכנס ל-github עם username: user password: pass`\n• `שמור סיסמה ל-gmail: user@gmail.com / mypass`\n• `הצג סיסמאות שמורות`\n\n### 🌐 דפדפן:\n• `פתח https://example.",
+      "exit_code": 0
+    },
+    {
+      "name": "FILE_LIST",
+      "status": "❌ FAILED",
+      "command": "מה יש לי בתיקייה",
+      "response_preview": "",
+      "exit_code": 1
+    },
+    {
+      "name": "FILE_DELETE",
+      "status": "✅ PASSED",
+      "command": "מחק קובץ gamma_test.txt",
+      "response_preview": "🗑️ **קובץ נמחק:** `gamma_test.txt`",
+      "exit_code": 0
+    },
+    {
+      "name": "ABOUT_GAMMA",
+      "status": "✅ PASSED",
+      "command": "מי אתה?",
+      "response_preview": "🤖 **אני גאמא - סוכן AI אוטונומי מתקדם!**\n\n## יכולות:\n\n### 🌐 גלישה וכניסה לחשבונות\n🔹 **כניסה לחשבונות** - `היכנס ל-gmail`, `היכנס ל-github`\n🔹 **שמירת סיסמאות** - `שמור סיסמה ל-[שירות]: [משתמש] / [סיסמה]`\n🔹 **פעולות בדפדפן** - `פתח https://example.com`",
+      "exit_code": 0
+    }
+  ],
+  "summary": {
+    "total": 15,
+    "passed": 13,
+    "failed": 2,
+    "skipped": 0
+  }
+}
