@@ -186,6 +186,10 @@ def handle_command(text, text_lower=None, thoughts=None, tools_used=None):
             "את 5 הכלים": "top 5 AI tools",
             "את האינטרנט ו": "",
             "סרוק": "search for",
+            # Hebrew names to English
+            "אילון מאסק": "Elon Musk",
+            "אילון": "Elon",
+            "מאסק": "Musk",
         }
         for heb, eng in translations.items():
             clean_query = clean_query.replace(heb, eng)
