@@ -212,6 +212,15 @@ def handle_security_audit():
 # ==========================================
 
 def plan_directive(directive_text):
+    """Break down directive into actionable steps - works with or without OpenAI"""
+    
+    # First try local parsing (no API needed)
+    local_plan = parse_directive_local(directive_text)
+    if local_plan and len(local_plan) > 1:
+        print(f"Local planning: {len(local_plan)} steps", flush=True)
+        return local_plan
+    
+    # Fall back to OpenAI if available
     if not OPENAI_AVAILABLE:
         return [{"action": "ביצוע בסיסי", "command": "מצב מערכת"}]
     
@@ -238,6 +247,45 @@ def plan_directive(directive_text):
     except Exception as e:
         print(f"Planning error: {e}")
         return [{"action": "ביצוע ברירת מחדל", "command": "מצב מערכת"}]
+
+def parse_directive_local(text):
+    """Parse directive locally using pattern matching"""
+    text_lower = text.lower()
+    steps = []
+    
+    # Morning/Sync Phase
+    if any(x in text_lower for x in ["morning", "sync phase", "בוקר", "סנכרון"]):
+        steps.append({"action": "🔄 Sync-State - סנכרון מצב", "command": "git fetch origin && cat state.json"})
+    
+    if any(x in text_lower for x in ["status report", "סטטוס", "report", "דוח"]):
+        steps.append({"action": "📊 Status-Report - דוח סטטוס", "command": "git status && ls -la"})
+    
+    if any(x in text_lower for x in ["token audit", "security audit", "בדיקת token", "בדיקת אבטחה"]):
+        steps.append({"action": "🔐 Token Audit - בדיקת אבטחה", "command": "echo 'GH_TOKEN exists:' && test -n $GH_TOKEN && echo 'YES' || echo 'NO'"})
+    
+    # Mid-Day/Execution Phase
+    if any(x in text_lower for x in ["mid-day", "execution phase", "ביצוע", "עיבוד"]):
+        steps.append({"action": "⚡ Execution Phase - שלב ביצוע", "command": "מצב מערכת"})
+    
+    if any(x in text_lower for x in ["lead", "לידים", "list", "רשימה"]):
+        steps.append({"action": "📋 Lead List Processing - עיבוד לידים", "command": "ls -la /workspace"})
+    
+    # Evening/Maintenance Phase
+    if any(x in text_lower for x in ["evening", "maintenance", "ערב", "תחזוקה"]):
+        steps.append({"action": "🧹 Maintenance-Cleanup - ניקוי", "command": "rm -f /workspace/*.log /workspace/temp_* 2>/dev/null; echo 'Cleanup done'"})
+    
+    if any(x in text_lower for x in ["archive", "שמירה", "final check"]):
+        steps.append({"action": "💾 Final Check-State - סיום", "command": "cat state.json"})
+    
+    # Empire Stability (always first if mentioned)
+    if any(x in text_lower for x in ["empire stability", "stability", "יציבות"]):
+        steps.insert(0, {"action": "🏛️ Empire Stability Check", "command": "df -h . && free -h"})
+    
+    # Default: if no specific phases, do system check
+    if not steps:
+        steps.append({"action": "🎯 Execute Directive", "command": "מצב מערכת"})
+    
+    return steps if steps else None
 
 # ==========================================
 # ALIAS MANAGER

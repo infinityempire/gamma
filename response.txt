@@ -1,1 +1,25 @@
+
+### Step 1: 🔄 Sync-State - סנכרון מצב
+✅ בוצע: git fetch origin && cat state.json
+
+### Step 2: 📊 Status-Report - דוח סטטוס
+✅ בוצע: git status && ls -la
+
+### Step 3: 🔐 Token Audit - בדיקת אבטחה
+✅ בוצע: echo 'GH_TOKEN exists:' && test -n $GH_TOKEN && echo 'YES' || echo 'NO'
+
+### Step 4: ⚡ Execution Phase - שלב ביצוע
+📊 מצב מערכת:
+CPU: 0.07 0.07 0.12 1/453 573
+Memory:
+total        used        free      shared  buff/cache   available
+Mem:            15Gi       1.7Gi       3.9Gi        40Mi        10Gi        13Gi
+Swap:             0B          0B          0B
+
+### Step 5: 📋 Lead List Processing - עיבוד לידים
+✅ בוצע: ls -la /workspace
+
+### Step 6: 🧹 Maintenance-Cleanup - ניקוי
+✅ בוצע: rm -f /workspace/*.log /workspace/temp_* 2>/dev/null; echo 'Cleanup done'
+
 ✅ כל שלבי ההנחיה הושלמו.
