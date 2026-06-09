@@ -104,10 +104,16 @@ def handle_question(text):
 
 או ספר לי יותר ואנסה לעזור! 💡"""
 
-def handle_command(text):
+def handle_command(text, text_lower=None, thoughts=None, tools_used=None):
     """Handle command-type inputs - using NATURAL LANGUAGE"""
     
-    text_lower = text.lower()
+    if thoughts is None:
+        thoughts = []
+    if tools_used is None:
+        tools_used = []
+    
+    if text_lower is None:
+        text_lower = text.lower()
     
     # ==========================================
     # FILE OPERATIONS - Natural Language
@@ -299,6 +305,9 @@ def handle_general(text):
 
 print("\n--- THINKING ---", flush=True)
 
+# Define text_lower for use in main logic
+text_lower = original_task.lower()
+
 # DETECT INPUT TYPE - Check commands BEFORE questions!
 version_patterns = ["מה גרסת", "npm version", "גרסת npm", "גרסת node", "node version", "גרסת python", "python version", "גרסת git", "git version"]
 command_patterns = ["צור קובץ", "create file", "תיצור", "צור טקסט", "list files", "מה יש", "אילו קבצים", "git status"]
@@ -307,22 +316,22 @@ command_patterns = ["צור קובץ", "create file", "תיצור", "צור טק
 if any(p in text_lower for p in version_patterns):
     print("📋 Detected: VERSION CHECK", flush=True)
     thoughts.append("זו בקשת גרסה - אבדוק את הגרסה")
-    response_text = handle_command(original_task)
+    response_text = handle_command(original_task, text_lower, thoughts, tools_used)
     
 # Check for file/command operations SECOND
 elif any(p in text_lower for p in command_patterns):
     print("⚡ Detected: COMMAND", flush=True)
     thoughts.append("זו פקודה - מבצע")
-    response_text = handle_command(original_task)
+    response_text = handle_command(original_task, text_lower, thoughts, tools_used)
 
 # THEN check for simple "run" command
 elif "run " in text_lower:
     print("⚡ Detected: RUN COMMAND", flush=True)
     thoughts.append("פקודת run - מבצע")
-    response_text = handle_command(original_task)
+    response_text = handle_command(original_task, text_lower, thoughts, tools_used)
     
 # FINALLY check for questions
-elif any(q in task for q in ["מה", "איך", "למה", "מי", "היכן", "?", "what", "how", "why", "who"]):
+elif any(q in original_task.lower() for q in ["מה", "איך", "למה", "מי", "היכן", "?", "what", "how", "why", "who"]):
     print("🎯 Detected: QUESTION", flush=True)
     thoughts.append("זו שאלה - מחפש תשובה")
     response_text = handle_question(original_task)
