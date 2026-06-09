@@ -173,34 +173,41 @@ def handle_command(text, text_lower=None, thoughts=None, tools_used=None):
         
         # Strategy 1: Clean the query - remove Hebrew, keep English
         clean_query = query
-        translations = {
-            "אילון מאסק": "Elon Musk",
-            "אילון": "Elon",
-            "מאסק": "Musk",
-            "כלי אוטומציה": "AI automation tools",
-            "בינה מלאכותית": "artificial intelligence",
-            "פופולרי": "popular",
-            "2026": "2026",
-            "יוני": "June",
-            "כמו": "",
-            "על": "",
-            "הכי": "best",
-            "5 ה": "top 5",
-            "את 5 הכלים": "top 5 AI tools",
-            "את האינטרנט ו": "",
-            "סרוק": "search for",
-            # Hebrew names to English
-            "אילון מאסק": "Elon Musk",
-            "אילון": "Elon",
-            "מאסק": "Musk",
-            # Hebrew query patterns
-            "מה זה": "what is",
-            "מי זה": "who is",
-            "חפש": "search",
-        }
-        for heb, eng in translations.items():
+        # Use ordered list for proper translations
+        translations = [
+            ("כלי אוטומציה של בינה מלאכותית", "AI automation tools"),
+            ("כלי אוטומציה", "AI automation tools"),
+            ("בינה מלאכותית", "AI"),
+            ("פופולרי", "popular"),
+            ("5 הכי", "top 5"),
+            ("הכי פופולריים", "most popular"),
+            ("כמו", ""),
+            ("על", ""),
+            ("של", ""),
+            ("הכי", "best"),
+            ("5 ה", "top 5"),
+            ("את 5 הכלים", "top 5 AI tools"),
+            ("את האינטרנט", ""),
+            ("סרוק", "search for"),
+            ("אילון מאסק", "Elon Musk"),
+            ("אילון", "Elon"),
+            ("מאסק", "Musk"),
+            ("מה זה", "what is"),
+            ("מי זה", "who is"),
+            ("חפש על", "search for"),
+            ("חפש", "search"),
+        ]
+        for heb, eng in translations:
             clean_query = clean_query.replace(heb, eng)
         clean_query = clean_query.strip()
+        # Clean up extra spaces
+        clean_query = ' '.join(clean_query.split())
+        # Remove remaining Hebrew characters
+        import re
+        clean_query = re.sub(r'[\u0590-\u05ff]+', '', clean_query)
+        clean_query = clean_query.strip()
+        # Clean up extra spaces
+        clean_query = ' '.join(clean_query.split())
         if clean_query:
             search_queries.append(clean_query)
         
