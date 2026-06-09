@@ -224,32 +224,52 @@ def handle_security_audit():
 
 def handle_repository_analysis():
     thoughts.append("Repository Analysis: סריקת הריפוזיטורי וחיפוש חוסר יעילות.")
+    state["current_step_name"] = "Repository Analysis"
     os.makedirs(os.path.join(workspace, "workspace"), exist_ok=True)
     with open(os.path.join(workspace, "workspace", "modular_service.py"), "w") as f:
         f.write("# Modular Python Service\ndef run():\n    print('Empire Service Running')")
-    return "✅ Repository Analysis הושלם. נוצר modular_service.py בתיקיית workspace."
+    res = "✅ Repository Analysis הושלם. נוצר modular_service.py בתיקיית workspace."
+    if "completed_steps" not in state: state["completed_steps"] = []
+    state["completed_steps"].append("Repository Analysis")
+    save_state()
+    return res
 
 def handle_dependency_mapping():
     thoughts.append("Dependency Mapping: איחוד תלויות ל-requirements.txt.")
+    state["current_step_name"] = "Dependency Mapping"
     reqs = "openai\ntavily-python\nplaywright\nrequests\n"
     with open(os.path.join(workspace, "requirements.txt"), "w") as f:
         f.write(reqs)
-    return "✅ Dependency Mapping הושלם. נוצר requirements.txt מאוחד."
+    res = "✅ Dependency Mapping הושלם. נוצר requirements.txt מאוחד."
+    if "completed_steps" not in state: state["completed_steps"] = []
+    state["completed_steps"].append("Dependency Mapping")
+    save_state()
+    return res
 
 def handle_operational_hardening():
     thoughts.append("Operational Hardening: יצירת סקריפטים לתיקון עצמי.")
+    state["current_step_name"] = "Operational Hardening"
     os.makedirs(os.path.join(workspace, "workspace", "healing_scripts"), exist_ok=True)
     with open(os.path.join(workspace, "workspace", "healing_scripts", "patch_token.py"), "w") as f:
         f.write("# Patch script for token failures\nprint('Patching...')")
-    return "✅ Operational Hardening הושלם. נוצרו סקריפטים בתיקיית healing_scripts."
+    res = "✅ Operational Hardening הושלם. נוצרו סקריפטים בתיקיית healing_scripts."
+    if "completed_steps" not in state: state["completed_steps"] = []
+    state["completed_steps"].append("Operational Hardening")
+    save_state()
+    return res
 
 def handle_generate_manifest():
     thoughts.append("Final Output: יצירת קובץ MANIFEST.md.")
+    state["current_step_name"] = "Final Output"
     manifest = f"# Empire Manifest\n\n- Gamma Agent: Active (Last run: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')})\n- Delta Agent: Standby\n"
     manifest_path = os.path.join(workspace, "MANIFEST.md")
     with open(manifest_path, "w", encoding="utf-8") as f:
         f.write(manifest)
-    return f"✅ MANIFEST.md נוצר בהצלחה בשורש הריפוזיטורי.\n\n**תוכן ה-Manifest:**\n\n{manifest}"
+    res = f"✅ MANIFEST.md נוצר בהצלחה בשורש הריפוזיטורי.\n\n**תוכן ה-Manifest:**\n\n{manifest}"
+    if "completed_steps" not in state: state["completed_steps"] = []
+    state["completed_steps"].append("Final Output")
+    save_state()
+    return res
 
 # ==========================================
 # LLM DIRECTIVE PLANNING
