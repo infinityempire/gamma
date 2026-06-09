@@ -362,14 +362,21 @@ with open(log_file, "a", encoding="utf-8") as f:
 # UPDATE STATE
 # ==========================================
 
+# Detect task type for state
+is_version = any(p in text_lower for p in version_patterns)
+is_command_task = any(p in text_lower for p in command_patterns) or "run " in text_lower
+is_question_task = any(q in original_task.lower() for q in ["מה", "איך", "למה", "מי", "היכן", "?", "what", "how", "why", "who"])
+
+task_type = "version" if is_version else "command" if is_command_task else "question" if is_question_task else "general"
+
 print("\n--- FINAL ---", flush=True)
-print(f"Type: {'Question' if is_question_input else 'Command' if is_command_input else 'General'}", flush=True)
+print(f"Type: {task_type}", flush=True)
 print(f"Tools: {len(tools_used)}", flush=True)
 print(f"Status: SUCCESS", flush=True)
 
 state["status"] = "completed"
 state["response"] = response_text
-state["task_type"] = "question" if is_question_input else "command" if is_command_input else "general"
+state["task_type"] = task_type
 state["tool_history"] = [{"tool": "chat", "count": len(tools_used)}]
 state["thought_process"] = thoughts
 state["tools_used"] = tools_used
