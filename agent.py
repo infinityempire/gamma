@@ -248,25 +248,17 @@ def handle_command(text):
     if "run" in text_lower:
         cmd = text_lower.replace("run", "").strip()
         if cmd:
-            thoughts.append(f"מריץ פקודה: {cmd}")
+            thoughts.append("מריץ פקודה: " + cmd)
             try:
                 r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
                 output = r.stdout.strip() if r.stdout else r.stderr.strip()
                 if r.returncode == 0:
-                    tools_used.append(f"Command: {cmd}")
-                    return f"✅ **פקודה בוצעה!**
-
-📤 **Output:**
-```
-{output if output else '(אין פלט)'}
-```"
+                    tools_used.append("Command: " + cmd)
+                    return "✅ פקודה בוצעה!\n\n📤 Output:\n" + (output if output else "(אין פלט)")
                 else:
-                    return f"❌ **שגיאה:**
-```
-{output}
-```"
+                    return "❌ שגיאה:\n" + output
             except Exception as e:
-                return f"❌ שגיאה: {str(e)}"
+                return "❌ שגיאה: " + str(e)
     
     # If nothing matched, ask what they need
     return """🤔 לא הבנתי בדיוק מה אתה צריך.
