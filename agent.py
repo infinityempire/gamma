@@ -173,26 +173,44 @@ def handle_command(text, text_lower=None, thoughts=None, tools_used=None):
             import urllib.parse
             import urllib.request
             
-            # First try Wikipedia
-            wiki_query = urllib.parse.quote(query.replace("2026", "").replace("ב2026", "").replace("יוני", "").strip())
-            wiki_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{wiki_query}"
+            # Clean query - remove Hebrew, keep English parts
+            clean_query = query
+            # Try to translate common Hebrew to English
+            translations = {
+                "כלי אוטומציה": "automation tools",
+                "בינה מלאכותית": "AI",
+                "פופולרי": "popular",
+                "2026": "2026",
+                "יוני": "June",
+                "כמו": "",
+                "על": "",
+                "הכי": "best",
+            }
+            for heb, eng in translations.items():
+                clean_query = clean_query.replace(heb, eng)
+            clean_query = clean_query.strip()
             
-            try:
-                req = urllib.request.Request(wiki_url, headers={"User-Agent": "GammaAgent/1.0"})
-                with urllib.request.urlopen(req, timeout=10) as response:
-                    wiki_data = json.loads(response.read().decode())
-                    if wiki_data.get("type") != "not-found":
-                        output = f"🔍 **תוצאות חיפוש עבור:** {query}\n\n"
-                        output += f"📝 **{wiki_data.get('title', 'מידע')}:**\n"
-                        output += wiki_data.get("extract", "")[:600] + "\n"
-                        if wiki_data.get("content_urls", {}).get("desktop", {}).get("page"):
-                            output += f"\n📎 [ויקיפדיה]({wiki_data['content_urls']['desktop']['page']})\n"
-                        tools_used.append("Web search (Wikipedia)")
-                        return output
-            except:
-                pass
+            # First try Wikipedia with English query
+            if clean_query:
+                wiki_query = urllib.parse.quote(clean_query.replace(" ", "_"))
+                wiki_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{wiki_query}"
+                
+                try:
+                    req = urllib.request.Request(wiki_url, headers={"User-Agent": "GammaAgent/1.0"})
+                    with urllib.request.urlopen(req, timeout=10) as response:
+                        wiki_data = json.loads(response.read().decode())
+                        if wiki_data.get("type") != "not-found":
+                            output = f"🔍 **תוצאות חיפוש עבור:** {query}\n\n"
+                            output += f"📝 **{wiki_data.get('title', 'מידע')}:**\n"
+                            output += wiki_data.get("extract", "")[:600] + "\n"
+                            if wiki_data.get("content_urls", {}).get("desktop", {}).get("page"):
+                                output += f"\n📎 [ויקיפדיה]({wiki_data['content_urls']['desktop']['page']})\n"
+                            tools_used.append("Web search (Wikipedia)")
+                            return output
+                except:
+                    pass
             
-            # Then try DuckDuckGo API
+            # Then try DuckDuckGo API with original query
             encoded_query = urllib.parse.quote(query)
             api_url = f"https://api.duckduckgo.com/?q={encoded_query}&format=json&no_html=1"
             
