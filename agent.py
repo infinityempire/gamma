@@ -140,8 +140,11 @@ def handle_command(text):
                         filename = words[0]
                 break
         
-        # Clean filename
-        filename = filename.replace(" ", "_").replace('"', '').replace("'", "").replace(",", "").replace(".", "")
+        # Clean filename - keep dots but remove bad chars
+        filename = filename.replace(" ", "_").replace('"', '').replace("'", "").replace(",", "")
+        # Ensure .txt extension if missing
+        if not filename.endswith(".txt"):
+            filename = filename + ".txt"
         
         # If content wasn't extracted, try to find "עם" in original text
         if content == "Hello from Gamma!" and "עם" in original_task:
