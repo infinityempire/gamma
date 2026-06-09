@@ -335,8 +335,12 @@ def main():
             save_state()
         
         plan = state["directive_plan"]
-        step_idx = state["current_directive_step"]
+        step_idx = state.get("current_directive_step", 0)
         
+        # Initialize response_text if resuming from a saved state
+        if not response_text and step_idx > 0:
+            response_text = state.get("response", "")
+            
         while step_idx < len(plan):
             step = plan[step_idx]
             update_interface_status("EXECUTION", step["action"], "Running", f"Executing step {step_idx+1}/{len(plan)}")
@@ -379,4 +383,15 @@ def main():
     print("=== DONE ===", flush=True)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        error_msg = f"CRITICAL_FAILURE: {str(e)}"
+        print(f"\n{error_msg}", flush=True)
+        update_interface_status("ERROR", "Main Execution", "Failed", error_msg)
+        state["status"] = "failed"
+        state["last_error"] = error_msg
+        save_state()
+        with open(response_file, "w", encoding="utf-8") as f:
+            f.write(f"❌ המשימה נכשלה: {str(e)}")
+        sys.exit(1)
