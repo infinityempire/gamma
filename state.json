@@ -1,18 +1,21 @@
 {
+  "task": "Gamma, from now on, recognize these command aliases for our daily operations:\n'MORNING': Execute Daily Sync & Status Report.\n'LEADS': Process Delta Agent leads and generate summary.\n'MAINTAIN': Perform system cleanup, security audit, and state archive.\n'STATUS': Display phase, current task, and thought process.\n'EMERGENCY': Secure state, archive progress, and halt all tasks.\nConfirm you have indexed these commands.",
   "status": "completed",
-  "task": "Master Operational Directive for Gamma Agent\n\"Gamma, your directive is to serve as the Operational Engine for the Tal HaTil Empire. You are to execute the following operational rhythm autonomously, ensuring stability, security, and task completion.\n1. Daily Operational Rhythm:\nMorning (Sync Phase): Execute Sync-State to pull the latest memory from state.json. Run Status-Report to summarize the progress of all pending empire tasks.\nMid-Day (Execution Phase): Process tasks queued from the 'Delta' agent. Read lead lists from the designated repository, filter by high-intent, and generate a structured lead summary report.\nEvening (Maintenance Phase): Run Maintenance-Cleanup. Purge temporary logs in /workspace, optimize disk usage, and perform a final Check-State to archive progress in state.json.\n2. Core Operational Rules:\nSecurity Audit: Daily, verify that GH_TOKEN is active and that no unauthorized files have been created in the workspace.\nTask Prioritization: Prioritize 'Empire Stability' (System Monitor, State Sync, Token Audit) over all other development tasks.\nError Handling: If a task fails, strictly follow the Self-Healing diagnostic routine: log, diagnose, patch, and re-attempt. Do not abort until 3 attempts are exhausted.\n3. Communication Standard:\nWhen updating the interface via interface_status.json, use the format: [PHASE] | [TASK] | [STATUS] | [THOUGHT PROCESS].\nIf a critical failure occurs in the Empire's infrastructure, notify me immediately via the interface_status.json log with the tag [CRITICAL_FAILURE].\nExecute your morning operational rhythm now.",
-  "history": [],
-  "directive_plan": [
-    {
-      "action": "ביצוע ברירת מחדל",
-      "command": "מצב מערכת"
-    }
+  "aliases": {
+    "MORNING": "Execute Daily Sync & Status Report",
+    "LEADS": "Process Delta Agent leads and generate summary",
+    "MAINTAIN": "Perform system cleanup, security audit, and state archive",
+    "STATUS": "Display phase, current task, and thought process",
+    "EMERGENCY": "Secure state, archive progress, and halt all tasks"
+  },
+  "thought_process": [
+    "Alias indexed: MORNING -> Execute Daily Sync & Status Report",
+    "Alias indexed: LEADS -> Process Delta Agent leads and generate summary",
+    "Alias indexed: MAINTAIN -> Perform system cleanup, security audit, and state archive",
+    "Alias indexed: STATUS -> Display phase, current task, and thought process",
+    "Alias indexed: EMERGENCY -> Secure state, archive progress, and halt all tasks"
   ],
-  "current_directive_step": 1,
-  "thought_process": [],
-  "tools_used": [
-    "System Monitor"
-  ],
-  "updated_at": "2026-06-09 17:00:15",
-  "response": "\n### Step 1: ביצוע ברירת מחדל\n📊 מצב מערכת:\nCPU: 0.10 0.10 0.07 1/306 3023\nMemory:\ntotal        used        free      shared  buff/cache   available\nMem:           3.8Gi       916Mi       2.4Gi        11Mi       920Mi       3.0Gi\nSwap:          2.0Gi          0B       2.0Gi\n"
+  "tools_used": [],
+  "updated_at": "2026-06-09 17:14:39",
+  "response": "✅ **הקיצורים (Aliases) אונדקסו בהצלחה:**\n\n• `MORNING`: Execute Daily Sync & Status Report\n• `LEADS`: Process Delta Agent leads and generate summary\n• `MAINTAIN`: Perform system cleanup, security audit, and state archive\n• `STATUS`: Display phase, current task, and thought process\n• `EMERGENCY`: Secure state, archive progress, and halt all tasks\n\nכעת תוכל להשתמש בהם ישירות!"
 }

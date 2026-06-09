@@ -240,16 +240,62 @@ def plan_directive(directive_text):
         return [{"action": "ביצוע ברירת מחדל", "command": "מצב מערכת"}]
 
 # ==========================================
+# ALIAS MANAGER
+# ==========================================
+
+def handle_alias_indexing(text):
+    """Indexes command aliases from the prompt into state.json"""
+    aliases = state.get("aliases", {})
+    
+    # Improved regex to find 'ALIAS': Command or ALIAS: Command
+    # Supports 'MORNING': Execute Daily Sync & Status Report.
+    # Supports MORNING: Execute Daily Sync & Status Report.
+    pattern = r"(?:'|\")?([A-Z_]+)(?:'|\")?:\s*([^.\n\r]+)"
+    matches = re.findall(pattern, text)
+        
+    for alias, cmd in matches:
+        clean_alias = alias.upper().strip()
+        clean_cmd = cmd.strip().rstrip('.')
+        aliases[clean_alias] = clean_cmd
+        thoughts.append(f"Alias indexed: {clean_alias} -> {clean_cmd}")
+    
+    state["aliases"] = aliases
+    save_state()
+    
+    if matches:
+        alias_list = "\n".join([f"• `{a}`: {c}" for a, c in matches])
+        return f"✅ **הקיצורים (Aliases) אונדקסו בהצלחה:**\n\n{alias_list}\n\nכעת תוכל להשתמש בהם ישירות!"
+    return "❌ לא הצלחתי לזהות קיצורים בפורמט הנדרש. השתמש בפורמט: `'ALIAS': Command`"
+
+# ==========================================
 # MAIN EXECUTION ENGINE
 # ==========================================
 
 def execute_command(cmd):
+    cmd_upper = cmd.strip().upper()
+    aliases = state.get("aliases", {})
+    
+    # Check for alias first
+    if cmd_upper in aliases:
+        real_cmd = aliases[cmd_upper]
+        thoughts.append(f"Executing alias: {cmd_upper} -> {real_cmd}")
+        return execute_command(real_cmd)
+
     cmd_lower = cmd.lower()
     
-    if "sync-state" in cmd_lower: return handle_sync_state()
-    if "status-report" in cmd_lower: return handle_status_report()
-    if "maintenance-cleanup" in cmd_lower: return handle_maintenance_cleanup()
-    if "security-audit" in cmd_lower: return handle_security_audit()
+    # Handle combined commands
+    if " & " in cmd_lower:
+        parts = cmd.split(" & ")
+        return "\n".join([execute_command(p.strip()) for p in parts])
+    if " and " in cmd_lower:
+        parts = cmd.split(" and ")
+        return "\n".join([execute_command(p.strip()) for p in parts])
+    
+    # Core Keywords Detection
+    if any(x in cmd_lower for x in ["sync-state", "daily sync", "sync memory"]): return handle_sync_state()
+    if any(x in cmd_lower for x in ["status-report", "status report", "summarize progress"]): return handle_status_report()
+    if any(x in cmd_lower for x in ["maintenance-cleanup", "system cleanup", "purge logs"]): return handle_maintenance_cleanup()
+    if any(x in cmd_lower for x in ["security-audit", "security audit", "token audit"]): return handle_security_audit()
     if "מצב מערכת" in cmd_lower or "system status" in cmd_lower: return handle_system_monitor()
     if "שמור סיסמה" in cmd_lower or "save credentials" in cmd_lower: return handle_save_credentials(cmd, cmd_lower)
     
@@ -270,10 +316,13 @@ def main():
     
     update_interface_status("INITIALIZING", "Agent Startup", "Running", "Gamma v2.0 is starting up.")
     
-    # Detect Directive
-    is_directive = any(x in task_lower for x in ["directive", "operational rhythm", "empire"])
+    # 1. Check for Alias Indexing command
+    if "command aliases" in task_lower or "index these commands" in task_lower:
+        update_interface_status("INDEXING", "Alias Indexing", "Running", "Indexing new command aliases.")
+        response_text = handle_alias_indexing(original_task)
     
-    if is_directive:
+    # 2. Check for Directive
+    elif any(x in task_lower for x in ["directive", "operational rhythm", "empire"]):
         update_interface_status("PLANNING", "Directive Analysis", "Thinking", "Complex directive detected. Planning steps...")
         
         if not state.get("directive_plan"):
