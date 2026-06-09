@@ -1,5 +1,4 @@
 name: "גאמא - סוכן AI"
-comment: "Enhanced with Dynamic Tool Selection, Self-Healing, and Interface Sync"
 
 on:
   workflow_dispatch:
