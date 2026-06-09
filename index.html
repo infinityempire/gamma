@@ -783,11 +783,16 @@
         const CONFIG = {
             repoOwner: 'infinityempire',
             repoName: 'gamma',
-            workflowId: 'gamma-main.yml'
+            workflowId: 'gamma-main.yml',
+            agentWorkflowId: 'gamma-agent.yml',
+            POLL_INTERVAL: 5000,  // Poll every 5 seconds
+            STATUS_FILE: 'interface_status.json'
         };
 
         let ghToken = localStorage.getItem('gh_token') || '';
         let isRunning = false;
+        let currentRunId = null;
+        let pollInterval = null;
 
         const messagesContainer = document.getElementById('messagesContainer');
         const chatInput = document.getElementById('chatInput');
@@ -828,6 +833,254 @@
             tokenInput.value = ghToken;
         }
 
+        // ═══════════════════════════════════════════════════════════
+        // Real-time Status Panel & Interface Sync
+        // ═══════════════════════════════════════════════════════════
+
+        function createStatusPanel() {
+            // Check if panel already exists
+            if (document.getElementById('statusPanel')) return;
+            
+            const header = document.querySelector('.header');
+            const panel = document.createElement('div');
+            panel.id = 'statusPanel';
+            panel.className = 'status-panel';
+            panel.style.cssText = `
+                display: none;
+                position: fixed;
+                top: 80px;
+                right: 20px;
+                width: 400px;
+                background: var(--bg-card);
+                border: 1px solid var(--accent-gamma);
+                border-radius: 16px;
+                padding: 20px;
+                z-index: 1000;
+                box-shadow: 0 0 40px var(--accent-gamma-glow);
+                direction: rtl;
+            `;
+            
+            panel.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h3 style="color: var(--accent-gamma); font-family: 'Orbitron', sans-serif; margin: 0;">
+                        🔄 סטטוס בזמן אמת
+                    </h3>
+                    <button onclick="closeStatusPanel()" style="
+                        background: none; border: none; color: var(--text-muted);
+                        cursor: pointer; font-size: 20px;
+                    ">✕</button>
+                </div>
+                
+                <div id="statusContent">
+                    <div class="status-item">
+                        <span style="color: var(--text-secondary);">משימה:</span>
+                        <span id="statusTask" style="color: var(--text-primary);">-</span>
+                    </div>
+                    <div class="status-item">
+                        <span style="color: var(--text-secondary);">סטטוס:</span>
+                        <span id="statusStatus" style="color: var(--accent-green);">ממתין</span>
+                    </div>
+                    <div class="status-item">
+                        <span style="color: var(--text-secondary);">איטרציה:</span>
+                        <span id="statusIteration" style="color: var(--accent-gamma);">0/10</span>
+                    </div>
+                    <div class="status-item">
+                        <span style="color: var(--text-secondary);">כלים שבוצעו:</span>
+                        <span id="statusTools" style="color: var(--accent-purple);">0</span>
+                    </div>
+                    <div class="status-item">
+                        <span style="color: var(--text-secondary);">כשלונות:</span>
+                        <span id="statusFailures" style="color: var(--accent-orange);">0</span>
+                    </div>
+                    
+                    <div style="margin-top: 16px; padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+                        <div style="color: var(--text-muted); font-size: 11px; margin-bottom: 8px;">
+                            🔮 תהליך חשיבה:
+                        </div>
+                        <div id="thoughtProcess" style="font-size: 13px; color: var(--text-secondary); max-height: 150px; overflow-y: auto;">
+                            (ריק)
+                        </div>
+                    </div>
+                    
+                    <div id="errorSection" style="margin-top: 12px; padding: 12px; background: rgba(255,51,102,0.1); border-radius: 8px; display: none;">
+                        <div style="color: var(--accent-pink); font-size: 12px;">
+                            ⚠️ שגיאה אחרונה:
+                        </div>
+                        <div id="lastError" style="color: var(--text-secondary); font-size: 12px; margin-top: 4px;"></div>
+                    </div>
+                </div>
+                
+                <style>
+                    .status-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border-subtle); }
+                </style>
+            `;
+            
+            document.body.appendChild(panel);
+        }
+
+        function updateStatusPanel(status) {
+            createStatusPanel();
+            const panel = document.getElementById('statusPanel');
+            if (!panel) return;
+            
+            panel.style.display = 'block';
+            
+            document.getElementById('statusTask').textContent = (status.task || '-').substring(0, 50) + (status.task && status.task.length > 50 ? '...' : '');
+            document.getElementById('statusIteration').textContent = `${status.iteration || 0}/${status.max_iterations || 10}`;
+            document.getElementById('statusTools').textContent = status.tools_executed || 0;
+            document.getElementById('statusFailures').textContent = status.failures || 0;
+            
+            // Update status color
+            const statusEl = document.getElementById('statusStatus');
+            const statusMap = {
+                'initialized': { text: 'מאותחל', color: 'var(--accent-orange)' },
+                'running': { text: 'בטיפול 🔄', color: 'var(--accent-gamma)' },
+                'diagnosing': { text: 'מאבחן 🔍', color: 'var(--accent-purple)' },
+                'repairing': { text: 'מתקן 🔧', color: 'var(--accent-pink)' },
+                'completed': { text: 'הושלם ✅', color: 'var(--accent-green)' },
+                'failed': { text: 'נכשל ❌', color: 'var(--accent-pink)' }
+            };
+            
+            const statusInfo = statusMap[status.status] || { text: status.status || 'לא ידוע', color: 'var(--text-muted)' };
+            statusEl.textContent = statusInfo.text;
+            statusEl.style.color = statusInfo.color;
+            
+            // Update thought process
+            const thoughts = status.thought_process || [];
+            const thoughtEl = document.getElementById('thoughtProcess');
+            if (thoughts.length > 0) {
+                thoughtEl.innerHTML = thoughts.map(t => `<div style="margin-bottom: 4px;">• ${t}</div>`).join('');
+            } else {
+                thoughtEl.innerHTML = '(ריק)';
+            }
+            
+            // Update error section
+            const errorSection = document.getElementById('errorSection');
+            if (status.last_error) {
+                errorSection.style.display = 'block';
+                document.getElementById('lastError').textContent = status.last_error;
+            } else {
+                errorSection.style.display = 'none';
+            }
+        }
+
+        function closeStatusPanel() {
+            const panel = document.getElementById('statusPanel');
+            if (panel) panel.style.display = 'none';
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // Real-time Polling for Interface Sync
+        // ═══════════════════════════════════════════════════════════
+
+        async function pollWorkflowStatus(runId) {
+            if (!runId) return;
+            
+            try {
+                // Get workflow run details
+                const response = await fetch(
+                    `https://api.github.com/repos/${CONFIG.repoOwner}/${CONFIG.repoName}/actions/runs/${runId}`,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${ghToken}`,
+                            'Accept': 'application/vnd.github+json'
+                        }
+                    }
+                );
+                
+                if (!response.ok) return;
+                
+                const runData = await response.json();
+                
+                // Update status panel based on run status
+                if (runData.status === 'in_progress') {
+                    updateStatusFromRun(runData);
+                    // Continue polling
+                    if (pollInterval) clearTimeout(pollInterval);
+                    pollInterval = setTimeout(() => pollWorkflowStatus(runId), CONFIG.POLL_INTERVAL);
+                } else if (runData.status === 'completed') {
+                    // Get final status from artifacts
+                    await fetchFinalStatus(runId);
+                    stopPolling();
+                } else {
+                    updateStatusFromRun(runData);
+                    stopPolling();
+                }
+                
+            } catch (error) {
+                console.error('Polling error:', error);
+            }
+        }
+
+        function updateStatusFromRun(runData) {
+            const status = {
+                task: runData.name || 'משימה',
+                status: runData.status === 'in_progress' ? 'running' : runData.conclusion || 'unknown',
+                iteration: 0,
+                max_iterations: 10,
+                tools_executed: 0,
+                failures: 0,
+                thought_process: [`🏃 Run: ${runData.name}`, `📊 Status: ${runData.status}`],
+                last_error: null
+            };
+            updateStatusPanel(status);
+        }
+
+        async function fetchFinalStatus(runId) {
+            try {
+                // Get artifacts to find interface_status.json
+                const response = await fetch(
+                    `https://api.github.com/repos/${CONFIG.repoOwner}/${CONFIG.repoName}/actions/runs/${runId}/artifacts`,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${ghToken}`,
+                            'Accept': 'application/vnd.github+json'
+                        }
+                    }
+                );
+                
+                if (!response.ok) return;
+                
+                const data = await response.json();
+                const statusArtifact = data.artifacts?.find(a => a.name === 'interface-status');
+                
+                if (statusArtifact) {
+                    const artifactResponse = await fetch(statusArtifact.archive_download_url, {
+                        headers: {
+                            'Authorization': `Bearer ${ghToken}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    });
+                    
+                    if (artifactResponse.ok) {
+                        const status = await artifactResponse.json();
+                        updateStatusPanel(status);
+                        
+                        // Add completion message
+                        if (status.status === 'completed') {
+                            addMessage(`✅ המשימה הושלמה בהצלחה!\n\n📊 איטרציות: ${status.iteration + 1}\n🔧 כלים: ${status.tools_executed}`, 'gamma');
+                        } else if (status.status === 'failed') {
+                            addMessage(`❌ המשימה נכשלה\n\n⚠️ ${status.last_error || 'שגיאה לא ידועה'}`, 'gamma');
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching final status:', error);
+            }
+        }
+
+        function stopPolling() {
+            if (pollInterval) {
+                clearTimeout(pollInterval);
+                pollInterval = null;
+            }
+            currentRunId = null;
+            setTimeout(() => {
+                closeStatusPanel();
+                isRunning = false;
+            }, 3000);
+        }
+
         async function sendMessage() {
             const message = chatInput.value.trim();
             if (!message || isRunning) return;
@@ -851,8 +1104,8 @@
             }
         }
 
-        async function triggerWorkflow(task) {
-            const url = `https://api.github.com/repos/${CONFIG.repoOwner}/${CONFIG.repoName}/actions/workflows/${CONFIG.workflowId}/dispatches`;
+        async function triggerWorkflow(task, workflowId = CONFIG.workflowId) {
+            const url = `https://api.github.com/repos/${CONFIG.repoOwner}/${CONFIG.repoName}/actions/workflows/${workflowId}/dispatches`;
             
             const response = await fetch(url, {
                 method: 'POST',
@@ -863,7 +1116,7 @@
                 },
                 body: JSON.stringify({
                     ref: 'main',
-                    inputs: { task: task, priority: 'normal', max_retries: '3' }
+                    inputs: { task: task, priority: 'normal', max_retries: '3', max_iterations: '10' }
                 })
             });
 
@@ -875,18 +1128,44 @@
                     `✅ המשימה נשלחה לביצוע!\n\n` +
                     `📋 משימה: "${task}"\n\n` +
                     `🔄 גאמא מבצעת את המשימה על שרתי GitHub Actions...\n\n` +
-                    `🛡️ מנגנוני בטיחות פעילים:\n` +
-                    `   • בדיקת בריאות מערכת\n` +
-                    `   • תיקון עצמי אוטומטי\n` +
-                    `   • ניסיונות חוזרים (עד 3)\n` +
-                    `   • שמירת checkpoint\n` +
-                    `   • ניתוח שגיאות מתקדם`,
+                    `🛡️ מנגנונים פעילים:\n` +
+                    `   • Dynamic Tool Selection (terminal, browser, file_editor)\n` +
+                    `   • Self-Healing with Diagnostic Routine\n` +
+                    `   • Persistence with state.json checkpoint\n` +
+                    `   • Workspace Isolation (/workspace only)\n` +
+                    `   • Real-time Interface Sync`,
                     'gamma',
                     { showLink: true, linkText: 'צפה בריצה ב-GitHub Actions', linkUrl: `https://github.com/${CONFIG.repoOwner}/${CONFIG.repoName}/actions` }
                 );
                 
                 showToast('🚀 המשימה נשלחה לגאמא!', 'success');
-                setTimeout(() => { isRunning = false; }, 5000);
+                
+                // Get run ID and start polling for real-time status
+                setTimeout(async () => {
+                    try {
+                        const runsResponse = await fetch(
+                            `https://api.github.com/repos/${CONFIG.repoOwner}/${CONFIG.repoName}/actions/runs?per_page=1`,
+                            {
+                                headers: {
+                                    'Authorization': `Bearer ${ghToken}`,
+                                    'Accept': 'application/vnd.github+json'
+                                }
+                            }
+                        );
+                        
+                        if (runsResponse.ok) {
+                            const runsData = await runsResponse.json();
+                            const latestRun = runsData.workflow_runs?.[0];
+                            if (latestRun && latestRun.status === 'in_progress') {
+                                currentRunId = latestRun.id;
+                                pollWorkflowStatus(currentRunId);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Error getting run ID:', e);
+                    }
+                }, 3000);
+                
             } else {
                 const error = await response.json().catch(() => ({}));
                 throw new Error(error.message || `שגיאת HTTP ${response.status}`);

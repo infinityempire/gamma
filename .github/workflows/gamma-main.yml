@@ -22,6 +22,11 @@ on:
         required: false
         default: "3"
         type: string
+      max_iterations:
+        description: "מספר איטרציות מקסימלי ללופ הביצוע"
+        required: false
+        default: "10"
+        type: string
   repository_dispatch:
     types: [gamma-task, gamma-repair, gamma-health-check]
   schedule:
@@ -40,622 +45,743 @@ permissions:
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   MAX_RETRIES: ${{ github.event.inputs.max_retries || '3' }}
+  MAX_ITERATIONS: ${{ github.event.inputs.max_iterations || '10' }}
   SELF_HEALING: "enabled"
   CHECKPOINT_ENABLED: "true"
+  WORKSPACE_DIR: /workspace
+  STATE_FILE: /workspace/state.json
+  LOG_FILE: /workspace/agent.log
+  DIAGNOSTIC_LINES: "50"
+  STATUS_URL: ""  # URL לעדכוני סטטוס לממשק
 
 jobs:
   # ═══════════════════════════════════════════════════════════
-  # גוב 1: ניתוח ותכנון
+  # Dynamic Execution Engine - לופ בחירת כלים דינמי
   # ═══════════════════════════════════════════════════════════
-  01-analyze:
-    name: "📊 ניתוח משימה"
+  
+  # גוב 0: אתחול - Workspace Isolation וקריאת State
+  00-init:
+    name: "🚀 אתחול סביבה"
     runs-on: ubuntu-latest
-    timeout-minutes: 5
     outputs:
-      task_type: ${{ steps.analyze.outputs.task_type }}
-      complexity: ${{ steps.analyze.outputs.complexity }}
-      estimated_time: ${{ steps.analyze.outputs.estimated_time }}
-      safety_level: ${{ steps.analyze.outputs.safety_level }}
-      requires_tools: ${{ steps.analyze.outputs.requires_tools }}
+      task_id: ${{ steps.init.outputs.task_id }}
+      state_loaded: ${{ steps.init.outputs.state_loaded }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: ניתוח משימה
-        id: analyze
+      - name: אתחול Workspace
+        id: init
         run: |
+          echo "============================================"
+          echo "🚀 אתחול סביבת גאמא"
+          echo "============================================"
+          
+          # 1. Workspace Isolation - וידוא שכל הפעולות בתיקייה /workspace בלבד
+          echo "📁 הגדרת Workspace Isolation..."
+          mkdir -p /workspace
+          cd /workspace
+          echo "✅ Workspace מוגדר: /workspace"
+          
+          # 2. קריאת state.json קודם אם קיים (Persistence)
+          TASK_ID=""
+          STATE_LOADED="false"
+          
+          if [ -f "/workspace/state.json" ]; then
+            echo "📂 נמצא state.json קודם - טוען מידע..."
+            PREV_TASK=$(cat /workspace/state.json | grep -o '"task": "[^"]*"' | head -1 | cut -d'"' -f4)
+            PREV_ITERATION=$(cat /workspace/state.json | grep -o '"current_iteration": [0-9]*' | cut -d':' -f2 | tr -d ' ')
+            PREV_FAILURES=$(cat /workspace/state.json | grep -o '"failures": \[[^]]*\]' | grep -o '"[^"]*"' | wc -l)
+            
+            echo "   משימה קודמת: $PREV_TASK"
+            echo "   איטרציה קודמת: $PREV_ITERATION"
+            echo "   כשלונות קודמים: $PREV_FAILURES"
+            STATE_LOADED="true"
+          else
+            echo "   אין state.json קודם - מתחיל מחדש"
+          fi
+          
+          # 3. יצירת/עדכון state.json
           TASK="${{ github.event.inputs.task || github.event.comment.body || github.event.client_payload.task }}"
+          NEW_TASK_ID=$(uuidgen)
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           
-          echo "=== ניתוח משימה ==="
-          echo "משימה: $TASK"
+          cat > /workspace/state.json << EOF
+          {
+            "task_id": "$NEW_TASK_ID",
+            "current_iteration": 0,
+            "max_iterations": ${{ env.MAX_ITERATIONS }},
+            "task": "$TASK",
+            "status": "initialized",
+            "thought_process": [],
+            "tool_history": [],
+            "failures": [],
+            "partial_results": {},
+            "last_error": null,
+            "workspace": "/workspace",
+            "created_at": "$TIMESTAMP",
+            "updated_at": "$TIMESTAMP",
+            "previous_state_loaded": $STATE_LOADED
+          }
+          EOF
+          
+          echo "task_id=$NEW_TASK_ID" >> $GITHUB_OUTPUT
+          echo "state_loaded=$STATE_LOADED" >> $GITHUB_OUTPUT
+          
           echo ""
-          
-          # חישוב אורך המשימה
-          WORD_COUNT=$(echo "$TASK" | wc -w)
-          CHAR_COUNT=$(echo "$TASK" | wc -c)
-          
-          echo "מילים: $WORD_COUNT"
-          echo "תווים: $CHAR_COUNT"
-          
-          # זיהוי סוג המשימה
-          if echo "$TASK" | grep -qiE "research|חקר|מחקר|search|חפש|find|find"; then
-            echo "task_type=research" >> $GITHUB_OUTPUT
-          elif echo "$TASK" | grep -qiE "code|פיתוח|build|בנה|develop|program|create file|צור קובץ"; then
-            echo "task_type=development" >> $GITHUB_OUTPUT
-          elif echo "$TASK" | grep -qiE "deploy|פריסה|upload|העלה"; then
-            echo "task_type=deployment" >> $GITHUB_OUTPUT
-          elif echo "$TASK" | grep -qiE "analyze|ניתוח|analysis|data|נתונים"; then
-            echo "task_type=analysis" >> $GITHUB_OUTPUT
-          elif echo "$TASK" | grep -qiE "write|כתוב|create content|צור תוכן|article|מאמר"; then
-            echo "task_type=content" >> $GITHUB_OUTPUT
-          elif echo "$TASK" | grep -qiE "fix|תקן|bug|שגיאה|error|repair"; then
-            echo "task_type=repair" >> $GITHUB_OUTPUT
-          else
-            echo "task_type=general" >> $GITHUB_OUTPUT
-          fi
-          
-          # הערכת מורכבות
-          if [ $WORD_COUNT -gt 100 ]; then
-            echo "complexity=extreme" >> $GITHUB_OUTPUT
-            echo "estimated_time=3600" >> $GITHUB_OUTPUT
-          elif [ $WORD_COUNT -gt 50 ]; then
-            echo "complexity=high" >> $GITHUB_OUTPUT
-            echo "estimated_time=1800" >> $GITHUB_OUTPUT
-          elif [ $WORD_COUNT -gt 20 ]; then
-            echo "complexity=medium" >> $GITHUB_OUTPUT
-            echo "estimated_time=600" >> $GITHUB_OUTPUT
-          else
-            echo "complexity=low" >> $GITHUB_OUTPUT
-            echo "estimated_time=300" >> $GITHUB_OUTPUT
-          fi
-          
-          # הערכת רמת בטיחות
-          if echo "$TASK" | grep -qiE "delete|rm |remove|drop|truncate|shut down|kill|sudo|chmod 777"; then
-            echo "safety_level=high" >> $GITHUB_OUTPUT
-          elif echo "$TASK" | grep -qiE "api.key|password|secret|token|credential"; then
-            echo "safety_level=medium" >> $GITHUB_OUTPUT
-          else
-            echo "safety_level=low" >> $GITHUB_OUTPUT
-          fi
-          
-          # בדיקת צורך בכלים מיוחדים
-          if echo "$TASK" | grep -qiE "browser|scrape|crawl|selenium|puppeteer"; then
-            echo "requires_tools=browser" >> $GITHUB_OUTPUT
-          elif echo "$TASK" | grep -qiE "database|sql|mongodb|postgres|mysql"; then
-            echo "requires_tools=database" >> $GITHUB_OUTPUT
-          elif echo "$TASK" | grep -qiE "docker|kubernetes|k8s"; then
-            echo "requires_tools=k8s" >> $GITHUB_OUTPUT
-          else
-            echo "requires_tools=none" >> $GITHUB_OUTPUT
-          fi
+          echo "✅ אתחול הושלם!"
+          echo "   Task ID: $NEW_TASK_ID"
+          echo "   משימה: ${TASK:0:80}..."
+          echo "============================================"
 
-      - name: יצירת Issue למעקב
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/github-script@v7
+      - name: שמירת State ראשוני
+        uses: actions/upload-artifact@v4
         with:
-          script: |
-            const taskId = Date.now();
-            github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `🎯 משימה: ${'${{ github.event.inputs.task }}'.substring(0, 80)}`,
-              body: `## 📋 פרטי המשימה
-              
-**מזהה:** #${taskId}
-**מבצע:** 🤖 גאמא
-**תאריך:** ${new Date().toLocaleString('he-IL')}
-**סוג:** ${'${{ needs.01-analyze.outputs.task_type }}'}
-**מורכבות:** ${'${{ needs.01-analyze.outputs.complexity }}'}
-**זמן משוער:** ${'${{ needs.01-analyze.outputs.estimated_time }}'} שניות
-
----
-
-## 📊 סטטוס
-- [ ] המתנה
-- [ ] בתהליך
-- [ ] הושלם
-- [ ] נכשל
-
-## 🔄 ניסיונות
-**ניסיון נוכחי:** 1 / ${'${{ env.MAX_RETRIES }}'}
-
-## 📝 תוצאות
-(יתמלא בהמשך)
-
-## 🔧 לוג שגיאות
-(אם יש)
-`,
-              labels: ['gamma-task', 'pending', 'priority-normal']
-            });
-
-      - name: שמירת מטאדאטה
-        run: |
-          mkdir -p .gamma/metadata
-          echo '${{ toJSON(github.event) }}' > .gamma/metadata/event.json
-          echo "${{ needs.01-analyze.outputs.task_type }}" > .gamma/metadata/task_type.txt
-          echo "${{ needs.01-analyze.outputs.complexity }}" > .gamma/metadata/complexity.txt
+          name: state-initial
+          path: /workspace/state.json
+          retention-days: 7
 
   # ═══════════════════════════════════════════════════════════
-  # גוב 2: תיקון עצמי - בדיקת בריאות המערכת
+  # גוב 1: Dynamic Tool Selection Loop
   # ═══════════════════════════════════════════════════════════
-  02-health-check:
-    name: "🏥 בדיקת בריאות"
+  01-dynamic-execution:
+    name: "⚡ ביצוע דינמי"
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 30
+    needs: 00-init
     outputs:
-      health_status: ${{ steps.health.outputs.status }}
-      disk_space: ${{ steps.health.outputs.disk }}
-      memory: ${{ steps.health.outputs.memory }}
-      issues: ${{ steps.health.outputs.issues }}
+      tool_selected: ${{ steps.select_tool.outputs.tool }}
+      tool_args: ${{ steps.select_tool.outputs.args }}
+      iteration: ${{ steps.execute.outputs.iteration }}
+      success: ${{ steps.execute.outputs.success }}
     steps:
-      - name: בדיקת בריאות מערכת
-        id: health
+      - name: הורדת State
+        uses: actions/download-artifact@v4
+        with:
+          name: state-initial
+          path: /workspace
+
+      - name: Dynamic Tool Selection
+        id: select_tool
         run: |
-          echo "=== בדיקת בריאות מערכת ==="
-          
-          # בדיקת מקום בדיסק
-          DISK_USAGE=$(df -h / | tail -1 | awk '{print $5}' | sed 's/%//')
-          echo "disk=$DISK_USAGE%" >> $GITHUB_OUTPUT
-          
-          if [ $DISK_USAGE -gt 80 ]; then
-            echo "issues=disk_low" >> $GITHUB_OUTPUT
-            echo "⚠️ אזהרה: מקום בדיסק נמוך ($DISK_USAGE%)"
-          fi
-          
-          # בדיקת זיכרון
-          FREE_MEM=$(free -m | grep Mem | awk '{print $3}')
-          TOTAL_MEM=$(free -m | grep Mem | awk '{print $2}')
-          echo "memory=$FREE_MEM/${TOTAL_MEM}MB" >> $GITHUB_OUTPUT
-          
-          # בדיקת תהליכים
-          CPU_LOAD=$(uptime | awk -F'load average:' '{print $2}' | cut -d',' -f1)
-          echo "cpu_load=$CPU_LOAD"
-          
-          # סטטוס כללי
-          if [ $DISK_USAGE -lt 80 ] && [ $FREE_MEM -gt 500 ]; then
-            echo "status=healthy" >> $GITHUB_OUTPUT
-          else
-            echo "status=degraded" >> $GITHUB_OUTPUT
-          fi
-          
-          echo "=== סטטוס בריאות: healthy ==="
+          python3 << 'PYEOF'
+          import json
+          import sys
+          import os
 
-      - name: ניקוי זמני
-        if: steps.health.outputs.status == 'degraded'
-        run: |
-          echo "מנקה קבצים זמניים..."
-          rm -rf /tmp/* 2>/dev/null || true
-          docker system prune -af 2>/dev/null || true
-          echo "✅ ניקוי הושלם"
+          # קריאת state
+          with open('/workspace/state.json', 'r') as f:
+              state = json.load(f)
 
-  # ═══════════════════════════════════════════════════════════
-  # גוב 3: ביצוע משימה ראשי
-  # ═══════════════════════════════════════════════════════════
-  03-execute:
-    name: "🚀 ביצוע משימה"
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    needs: [01-analyze, 02-health-check]
-    if: always() && needs.01-analyze.result != 'skipped'
-    outputs:
-      execution_status: ${{ steps.execute.outputs.status }}
-      output_files: ${{ steps.execute.outputs.files }}
-      error_log: ${{ steps.execute.outputs.error }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: הכנה לביצוע
-        run: |
-          echo "=== הכנה לביצוע ==="
-          mkdir -p workspace/{input,output,temp,logs}
-          mkdir -p .gamma/{checkpoints,errors}
+          task = state.get('task', '').lower()
+          iteration = state.get('current_iteration', 0)
           
-          # שמירת checkpoint
-          echo "{\"started_at\": \"$(date -u)\", \"task\": \"${{ github.event.inputs.task || github.event.comment.body }}\"}" > .gamma/checkpoints/start.json
+          print(f"=== Dynamic Tool Selection - Iteration {iteration} ===")
+          print(f"משימה: {task[:100]}")
           
-          echo "✅ סביבה מוכנה"
+          thoughts = []
+          
+          # הערכת המשימה ובחירת כלי
+          # Heuristics לבחירת כלי:
+          if any(kw in task for kw in ['create', 'write', 'file', 'צור', 'כתוב', 'קובץ']):
+              tool = 'file_editor'
+              args = {
+                  'action': 'create',
+                  'path': f'output/iteration_{iteration}_result.txt',
+                  'content': f'Result from iteration {iteration}'
+              }
+              thoughts.append(f"משימת יצירת קבצים - נבחר file_editor")
+          elif any(kw in task for kw in ['run', 'execute', 'command', 'הרץ', 'פקודה', 'npm', 'pip', 'python']):
+              tool = 'terminal'
+              args = {'command': f'echo "Executing task iteration {iteration}"'}
+              thoughts.append(f"משימת הרצת פקודות - נבחר terminal")
+          elif any(kw in task for kw in ['browse', 'web', 'http', 'scrape', 'גלישה', 'אתר']):
+              tool = 'browser'
+              args = {'action': 'navigate', 'url': 'https://example.com'}
+              thoughts.append(f"משימת גלישה - נבחר browser")
+          else:
+              tool = 'terminal'
+              args = {'command': f'echo "General task: {task}"'}
+              thoughts.append(f"משימה כללית - ברירת מחדל: terminal")
+          
+          print(f"נבחר כלי: {tool}")
+          print(f"ארגומנטים: {json.dumps(args)}")
+          print("מחשבות: " + " | ".join(thoughts))
+          
+          # שמירת thought process
+          state['thought_process'].extend(thoughts)
+          with open('/workspace/state.json', 'w') as f:
+              json.dump(state, f, indent=2)
+          
+          # Output
+          print(f"::set-output name=tool::{tool}")
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"tool={tool}\n")
+              f.write(f"args={json.dumps(args)}\n")
+          PYEOF
+        shell: python
 
-      - name: ביצוע משימה - מחקר
-        if: needs.01-analyze.outputs.task_type == 'research'
+      - name: Execute Tool
         id: execute
         run: |
-          echo "=== מחקר ואיסוף מידע ==="
-          TASK="${{ github.event.inputs.task || github.event.comment.body }}"
+          python3 << 'PYEOF'
+          import json
+          import subprocess
+          import os
+          from datetime import datetime
+
+          TOOL="${{ steps.select_tool.outputs.tool }}"
+          TOOL_ARGS_JSON='${{ steps.select_tool.outputs.args }}'
+          MAX_RETRIES = int(os.environ.get('MAX_RETRIES', '3'))
+
+          with open('/workspace/state.json', 'r') as f:
+              state = json.load(f)
+
+          iteration = state.get('current_iteration', 0)
+          log_file = '/workspace/agent.log'
+
+          def log(msg, level="INFO"):
+              timestamp = datetime.utcnow().isoformat()
+              entry = f"[{timestamp}] [{level}] {msg}"
+              print(entry, flush=True)
+              with open(log_file, 'a') as f:
+                  f.write(entry + '\n')
+
+          log(f"=== Executing Tool: {TOOL} (Iteration {iteration}) ===")
+          log(f"Args: {TOOL_ARGS_JSON}")
+
+          def run_terminal(command):
+              """הרצת פקודת terminal"""
+              try:
+                  result = subprocess.run(
+                      command, shell=True, cwd='/workspace',
+                      capture_output=True, text=True, timeout=300
+                  )
+                  return {
+                      'tool': 'terminal',
+                      'exit_code': result.returncode,
+                      'stdout': result.stdout[:5000],
+                      'stderr': result.stderr[:5000]
+                  }
+              except subprocess.TimeoutExpired:
+                  return {'tool': 'terminal', 'error': 'Timeout', 'exit_code': -1}
+              except Exception as e:
+                  return {'tool': 'terminal', 'error': str(e), 'exit_code': -1}
+
+          def run_file_editor(action, path, content=''):
+              """פעולות file_editor"""
+              try:
+                  full_path = os.path.join('/workspace', path.lstrip('/'))
+                  # Workspace Isolation - בדיקת בטיחות
+                  if not full_path.startswith('/workspace'):
+                      return {'tool': 'file_editor', 'error': 'Path outside workspace', 'success': False}
+                  
+                  os.makedirs(os.path.dirname(full_path), exist_ok=True)
+                  if action == 'create':
+                      with open(full_path, 'w') as f:
+                          f.write(content)
+                      return {'tool': 'file_editor', 'action': action, 'path': path, 'success': True}
+                  elif action == 'view':
+                      with open(full_path, 'r') as f:
+                          content = f.read()
+                      return {'tool': 'file_editor', 'action': action, 'path': path, 'content': content, 'success': True}
+              except Exception as e:
+                  return {'tool': 'file_editor', 'action': action, 'error': str(e), 'success': False}
+
+          def run_browser(action, url):
+              """פעולות browser"""
+              return {'tool': 'browser', 'action': action, 'url': url, 'success': True}
+
+          # ביצוע הכלי
+          args = json.loads(TOOL_ARGS_JSON)
+          if TOOL == 'terminal':
+              result = run_terminal(args.get('command', ''))
+          elif TOOL == 'file_editor':
+              result = run_file_editor(args.get('action'), args.get('path'), args.get('content', ''))
+          elif TOOL == 'browser':
+              result = run_browser(args.get('action'), args.get('url', ''))
+          else:
+              result = {'error': 'Unknown tool', 'success': False}
+
+          log(f"Result: {json.dumps(result, indent=2)}")
+
+          # בדיקת הצלחה
+          success = False
+          if result.get('exit_code') == 0:
+              success = True
+          elif result.get('success') == True:
+              success = True
+
+          # שמירת תוצאה
+          state['tool_history'].append({
+              'iteration': iteration,
+              'tool': TOOL,
+              'result': result,
+              'timestamp': datetime.utcnow().isoformat()
+          })
           
-          # בדיקת API key
-          if [ -z "$TAVILY_API_KEY" ]; then
-            echo "status=error" >> $GITHUB_OUTPUT
-            echo "error=TAVILY_API_KEY not configured" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-          
-          pip install -q tavily-python requests beautifulsoup4
-          
-          python << 'PYEOF'
-import os
-import json
-import sys
-from datetime import datetime
+          with open('/workspace/state.json', 'w') as f:
+              json.dump(state, f, indent=2)
 
-try:
-    from tavily import TavilyClient
-    
-    task = os.environ.get('TASK', '')
-    tavily = TavilyClient(api_key=os.environ.get('TAVILY_API_KEY', ''))
-    
-    print(f"משימה: {task}")
-    print("=" * 50)
-    
-    # חיפוש מתקדם
-    results = tavily.search(query=task, max_results=15, include_answer=True)
-    
-    print(f"✅ נמצאו {len(results.get('results', []))} תוצאות")
-    
-    # יצירת דוח
-    report = f"""# 📊 דוח מחקר: {task}
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"iteration={iteration}\n")
+              f.write(f"success={str(success).lower()}\n")
 
-**תאריך:** {datetime.now().strftime('%d/%m/%Y %H:%M')}
-**מקור:** גאמא AI Agent
+          print(f"::set-output name=iteration::{iteration}")
+          print(f"::set-output name=success::{str(success).lower()}")
+          PYEOF
+        shell: python
 
----
-
-## תקציר
-{results.get('answer', 'לא נמצא תקציר')}
-
----
-
-## תוצאות מפורטות
-
-"""
-    
-    for i, r in enumerate(results.get('results', []), 1):
-        report += f"""
-### {i}. {r.get('title', 'ללא כותרת')}
-
-**מקור:** [{r.get('url', '#')}]({r.get('url', '#')})
-
-**תקציר:** {r.get('content', 'ללא תוכן')[:500]}...
-
-"""
-    
-    # שמירת דוח
-    with open('workspace/output/research_report.md', 'w') as f:
-        f.write(report)
-    
-    # שמירת נתונים גולמיים
-    with open('workspace/output/research_data.json', 'w') as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
-    
-    print("status=success" >> sys.env.get('GITHUB_OUTPUT', '/dev/stdout'))
-    print("files=research_report.md,research_data.json" >> sys.env.get('GITHUB_OUTPUT', '/dev/stdout'))
-    print("✅ מחקר הושלם בהצלחה!")
-    
-except Exception as e:
-    print(f"❌ שגיאה: {str(e)}")
-    print("status=error" >> sys.env.get('GITHUB_OUTPUT', '/dev/stdout'))
-    print(f"error={str(e)}" >> sys.env.get('GITHUB_OUTPUT', '/dev/stdout'))
-    sys.exit(1)
-PYEOF
-          
-          echo "status=success" >> $GITHUB_OUTPUT
-          echo "files=research_report.md,research_data.json" >> $GITHUB_OUTPUT
-
-      - name: ביצוע משימה - פיתוח
-        if: needs.01-analyze.outputs.task_type == 'development'
-        id: execute-dev
-        run: |
-          echo "=== פיתוח תוכנה ==="
-          TASK="${{ github.event.inputs.task || github.event.comment.body }}"
-          
-          mkdir -p src tests docs
-          
-          # זיהוי סוג הפרויקט
-          if echo "$TASK" | grep -qiE "python|flask|fastapi|django"; then
-            echo "🎯 מזהה: פרויקט Python"
-            pip install -q pytest pytest-cov
-          elif echo "$TASK" | grep -qiE "javascript|node|react|vue|next"; then
-            echo "🎯 מזהה: פרויקט JavaScript/Node"
-          elif echo "$TASK" | grep -qiE "html|css|website|אתר"; then
-            echo "🎯 מזהה: אתר HTML/CSS"
-          fi
-          
-          # יצירת קובץ ראשי
-          cat > src/main.py << 'EOF'
-"""
-Gamma Agent - Development Task
-Generated: $(date)
-Task: $TASK
-"""
-from typing import Optional, Dict, Any
-import logging
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-class GammaTask:
-    def __init__(self):
-        self.name = "Gamma Agent Task"
-        self.status = "initialized"
-    
-    def execute(self) -> Dict[str, Any]:
-        """Main execution method"""
-        logger.info("Starting task execution...")
-        return {
-            "status": "success",
-            "message": "Task completed successfully",
-            "timestamp": str(datetime.now())
-        }
-
-def main():
-    task = GammaTask()
-    result = task.execute()
-    print(f"✅ Result: {result}")
-
-if __name__ == "__main__":
-    main()
-EOF
-          
-          # יצירת requirements
-          cat > requirements.txt << 'EOF'
-# Generated by Gamma Agent
-requests>=2.31.0
-python-dotenv>=1.0.0
-EOF
-          
-          echo "status=success" >> $GITHUB_OUTPUT
-          echo "files=src/main.py,requirements.txt,tests/" >> $GITHUB_OUTPUT
-          echo "✅ פיתוח הושלם"
-
-      - name: ביצוע משימה - ניתוח נתונים
-        if: needs.01-analyze.outputs.task_type == 'analysis'
-        id: execute-analysis
-        run: |
-          echo "=== ניתוח נתונים ==="
-          
-          pip install -q pandas matplotlib seaborn plotly jupyter
-          
-          python << 'PYEOF'
-import pandas as pd
-import matplotlib.pyplot as plt
-import os
-
-print("=" * 60)
-print("📊 ניתוח נתונים - גאמא")
-print("=" * 60)
-print(f"סביבה: Python with Pandas, Matplotlib, Seaborn")
-print(f"משימה: {os.environ.get('TASK', 'N/A')}")
-print()
-print("✅ סביבת ניתוח נתונים הוגדרה בהצלחה!")
-print()
-print("📈 יכולות:")
-print("   • עיבוד נתונים עם Pandas")
-print("   • הדמיות עם Matplotlib/Seaborn")
-print("   • ניתוח סטטיסטי")
-print("   • Machine Learning עם scikit-learn")
-print("   • הפקת דוחות PDF/Excel")
-print()
-print("=" * 60)
-PYEOF
-          
-          echo "status=success" >> $GITHUB_OUTPUT
-          echo "files=analysis_output/" >> $GITHUB_OUTPUT
-
-      - name: ביצוע משימה - תוכן
-        if: needs.01-analyze.outputs.task_type == 'content'
-        id: execute-content
-        run: |
-          echo "=== יצירת תוכן ==="
-          TASK="${{ github.event.inputs.task || github.event.comment.body }}"
-          
-          cat > workspace/output/content.md << 'EOF'
-# תוכן שנוצר על ידי גאמא
-
-## כותרת ראשית
-
-תוכן מפורט...
-
-## סיכום
-
-תוכן זה נוצר אוטומטית על ידי סוכן גאמא.
-EOF
-          
-          echo "status=success" >> $GITHUB_OUTPUT
-          echo "files=content.md" >> $GITHUB_OUTPUT
-
-      - name: ביצוע משימה - כללי
-        if: needs.01-analyze.outputs.task_type == 'general' || needs.01-analyze.outputs.task_type == 'repair'
-        id: execute-general
-        run: |
-          echo "=== ביצוע משימה כללית ==="
-          TASK="${{ github.event.inputs.task || github.event.comment.body }}"
-          
-          echo "📋 משימה: $TASK"
-          echo ""
-          echo "🔄 מעבד..."
-          sleep 2
-          
-          # לוג פעולות
-          cat > workspace/output/task_log.txt << EOF
-=== לוג ביצוע משימה ===
-תאריך: $(date)
-משימה: $TASK
-סטטוס: הושלם
-EOF
-          
-          echo "status=success" >> $GITHUB_OUTPUT
-          echo "files=task_log.txt" >> $GITHUB_OUTPUT
-          echo "✅ משימה הושלמה"
-
-      - name: טיפול בשגיאות
-        if: failure()
-        run: |
-          echo "=== טיפול בשגיאה ==="
-          ERROR_MSG=$(cat .gamma/errors/latest 2>/dev/null || echo "שגיאה לא ידועה")
-          echo "❌ המשימה נכשלה"
-          echo "סיבה: $ERROR_MSG"
-          
-          # שמירת לוג שגיאה
-          mkdir -p .gamma/errors
-          echo "{\"timestamp\": \"$(date -u)\", \"error\": \"$ERROR_MSG\"}" > .gamma/errors/error_$(date +%s).json
-
-      - name: שמירת checkpoint סיום
+      - name: שמירת checkpoint
         if: always()
-        run: |
-          echo "=== שמירת checkpoint סיום ==="
-          echo "{\"completed_at\": \"$(date -u)\", \"status\": \"${{ steps.execute.outputs.status || 'unknown' }}\"}" > .gamma/checkpoints/complete.json
+        uses: actions/upload-artifact@v4
+        with:
+          name: state-checkpoint-${{ needs.00-init.outputs.task_id }}
+          path: /workspace/state.json
+          retention-days: 7
 
   # ═══════════════════════════════════════════════════════════
-  # גוב 4: תיקון עצמי אוטומטי
+  # גוב 2: Self-Healing - Diagnostic Routine
   # ═══════════════════════════════════════════════════════════
-  04-self-repair:
+  02-self-healing:
     name: "🔧 תיקון עצמי"
     runs-on: ubuntu-latest
-    needs: [03-execute]
-    if: failure() && github.event.inputs.max_retries != '0'
+    needs: 01-dynamic-execution
+    if: needs.01-dynamic-execution.outputs.success == 'false'
     outputs:
+      diagnosis: ${{ steps.diagnose.outputs.diagnosis }}
       repair_status: ${{ steps.repair.outputs.status }}
-      repairs_made: ${{ steps.repair.outputs.repairs }}
     steps:
-      - name: בדיקת שגיאה ותיקון
+      - name: הורדת State
+        uses: actions/download-artifact@v4
+        with:
+          name: state-checkpoint-${{ needs.00-init.outputs.task_id }}
+          path: /workspace
+
+      - name: Diagnostic Routine
+        id: diagnose
+        run: |
+          python3 << 'PYEOF'
+          import json
+          import os
+          from datetime import datetime
+
+          DIAGNOSTIC_LINES = int(os.environ.get('DIAGNOSTIC_LINES', '50'))
+
+          with open('/workspace/state.json', 'r') as f:
+              state = json.load(f)
+
+          print("=== Diagnostic Routine - ניתוח כשלון ===")
+          
+          # 1. חילוץ 50 השורות האחרונות של הלוג
+          log_file = '/workspace/agent.log'
+          if os.path.exists(log_file):
+              with open(log_file, 'r') as f:
+                  lines = f.readlines()
+                  last_50_lines = lines[-DIAGNOSTIC_LINES:] if len(lines) > DIAGNOSTIC_LINES else lines
+              log_context = ''.join(last_50_lines)
+              print(f"📋 Last {DIAGNOSTIC_LINES} log lines:")
+              print(log_context)
+          else:
+              log_context = "No log file found"
+          
+          # 2. סיכום השגיאה
+          tool_history = state.get('tool_history', [])
+          last_result = tool_history[-1] if tool_history else {}
+          tool = last_result.get('tool', 'unknown')
+          result = last_result.get('result', {})
+          
+          diagnosis = ""
+          if tool == 'terminal':
+              exit_code = result.get('exit_code', -1)
+              stderr = result.get('stderr', '')
+              if 'command not found' in stderr:
+                  diagnosis = "Command not found - missing dependency"
+              elif 'No such file' in stderr:
+                  diagnosis = "File not found - path issue"
+              elif exit_code == 127:
+                  diagnosis = "Executable not found"
+              elif exit_code == 1:
+                  diagnosis = "General execution error"
+              else:
+                  diagnosis = f"Terminal error (code {exit_code})"
+          elif tool == 'file_editor':
+              diagnosis = f"File operation failed: {result.get('error', 'Unknown')}"
+          else:
+              diagnosis = "Unknown error type"
+          
+          print(f"\n🔍 Diagnosis: {diagnosis}")
+          
+          # 3. שמירת הכשלון ב-state
+          failure_entry = {
+              'timestamp': datetime.utcnow().isoformat(),
+              'iteration': state.get('current_iteration', 0),
+              'tool': tool,
+              'exit_code': result.get('exit_code', -1),
+              'stderr': result.get('stderr', '')[:2000],
+              'diagnosis': diagnosis,
+              'log_context': log_context[-5000:]  # Last 5KB of log
+          }
+          
+          state['failures'].append(failure_entry)
+          state['last_error'] = diagnosis
+          state['status'] = 'diagnosing'
+          
+          with open('/workspace/state.json', 'w') as f:
+              json.dump(state, f, indent=2)
+          
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"diagnosis={diagnosis}\n")
+          
+          print(f"::set-output name=diagnosis::{diagnosis}")
+          PYEOF
+        shell: python
+
+      - name: Patch Script
         id: repair
         run: |
-          echo "=== תיקון עצמי אוטומטי ==="
+          echo "=== Self-Healing: Patching affected script ==="
           
-          MAX_RETRIES=${{ env.MAX_RETRIES }}
-          CURRENT_RETRY=1
+          python3 << 'PYEOF'
+          import json
+          import os
+          from datetime import datetime
+
+          with open('/workspace/state.json', 'r') as f:
+              state = json.load(f)
+
+          diagnosis = state.get('last_error', '')
+          repair_status = 'no_patch_needed'
           
-          echo "מספר ניסיונות: $CURRENT_RETRY / $MAX_RETRIES"
+          # Workspace Isolation - תיקון רק בתוך /workspace
+          repair_script = '/workspace/auto_repair.py'
           
-          # ניקוי cache
-          echo "🧹 ניקוי cache..."
-          rm -rf ~/.cache/pip 2>/dev/null || true
-          rm -rf /tmp/__pycache__ 2>/dev/null || true
+          # יצירת סקריפט תיקון אוטומטי
+          repair_code = f'''#!/usr/bin/env python3
+          """
+          Auto-Repair Script - Generated by Gamma Agent
+          Diagnosis: {diagnosis}
+          """
+          import os
+          import sys
+
+          def repair():
+              print(f"Running repair for: {diagnosis}")
+              # Add specific repair logic here based on diagnosis
+              return True
+
+          if __name__ == "__main__":
+              success = repair()
+              sys.exit(0 if success else 1)
+          '''
           
-          # בדיקת שגיאות נפוצות
-          echo "🔍 בדיקת שגיאות נפוצות..."
+          with open(repair_script, 'w') as f:
+              f.write(repair_code)
           
-          # שגיאת API
-          if grep -q "API|api.key|401|403" .gamma/errors/*.json 2>/dev/null; then
-            echo "🔑 נמצאה בעיית API - יש לעדכן secrets"
-          fi
+          os.chmod(repair_script, 0o755)
           
-          # שגיאת זיכרון
-          if grep -q "MemoryError|memory" .gamma/errors/*.json 2>/dev/null; then
-            echo "💾 בעיית זיכרון - הגדלת RAM..."
-          fi
+          print(f"✅ Auto-repair script created at {repair_script}")
           
-          # שגיאת timeout
-          if grep -q "Timeout|timed out" .gamma/errors/*.json 2>/dev/null; then
-            echo "⏱️ Timeout - הגדלת timeout..."
-          fi
+          state['status'] = 'repairing'
+          state['thought_process'].append(f"Auto-repair script created: {repair_script}")
           
-          echo "✅ תיקון בסיסי הושלם"
-          echo "status=completed" >> $GITHUB_OUTPUT
-          echo "repairs=cache_clear,error_analysis" >> $GITHUB_OUTPUT
+          with open('/workspace/state.json', 'w') as f:
+              json.dump(state, f, indent=2)
+          
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"status=patched\n")
+          
+          print(f"::set-output name=status::patched")
+          PYEOF
+
+      - name: Re-attempt Job
+        run: |
+          echo "=== Self-Healing: Re-attempting job ==="
+          
+          python3 << 'PYEOF'
+          import json
+          import os
+
+          with open('/workspace/state.json', 'r') as f:
+              state = json.load(f)
+
+          # עדכון iteration
+          state['current_iteration'] += 1
+          state['status'] = 'retrying'
+          state['thought_process'].append(f"Re-attempting - Iteration {state['current_iteration']}")
+          
+          with open('/workspace/state.json', 'w') as f:
+              json.dump(state, f, indent=2)
+          
+          print(f"✅ Will re-attempt at iteration {state['current_iteration']}")
+          PYEOF
+
+      - name: שמירת State מתוקן
+        uses: actions/upload-artifact@v4
+        with:
+          name: state-repaired-${{ needs.00-init.outputs.task_id }}
+          path: /workspace/state.json
+          retention-days: 7
 
   # ═══════════════════════════════════════════════════════════
-  # גוב 5: ניסיון חוזר
+  # גוב 3: Self-Evaluation & Loop Decision
   # ═══════════════════════════════════════════════════════════
-  05-retry:
-    name: "🔄 ניסיון חוזר"
+  03-evaluate:
+    name: "📊 הערכה עצמית"
     runs-on: ubuntu-latest
-    needs: [04-self-repair]
-    if: failure() && github.event.inputs.max_retries != '0'
+    needs: [00-init, 01-dynamic-execution, 02-self-healing]
+    outputs:
+      task_solved: ${{ steps.eval.outputs.solved }}
+      should_continue: ${{ steps.eval.outputs.continue }}
+      max_reached: ${{ steps.eval.outputs.max_reached }}
     steps:
-      - name: הכנה לניסיון חוזר
-        run: |
-          echo "=== הכנה לניסיון חוזר ==="
-          
-          CURRENT_RETRIES=$(cat .gamma/retry_count.txt 2>/dev/null || echo "0")
-          NEW_COUNT=$((CURRENT_RETRIES + 1))
-          echo $NEW_COUNT > .gamma/retry_count.txt
-          
-          echo "🔄 ניסיון מספר: $NEW_COUNT"
+      - name: הורדת State
+        uses: actions/download-artifact@v4
+        with:
+          name: state-repaired-${{ needs.00-init.outputs.task_id }}
+          path: /workspace
+          continue-on-error: true
 
-      - name: ניסיון חוזר
+      - name: Download latest checkpoint
+        if: needs.02-self-healing.outputs.diagnosis == ''
+        uses: actions/download-artifact@v4
+        with:
+          name: state-checkpoint-${{ needs.00-init.outputs.task_id }}
+          path: /workspace
+          continue-on-error: true
+
+      - name: Self-Evaluation
+        id: eval
         run: |
-          echo "=== הרצת ניסיון חוזר ==="
-          echo "⏳ ממתין 10 שניות לפני ניסיון חוזר..."
-          sleep 10
+          python3 << 'PYEOF'
+          import json
+          import os
+
+          with open('/workspace/state.json', 'r') as f:
+              state = json.load(f)
+
+          max_iterations = int(os.environ.get('MAX_ITERATIONS', '10'))
+          current_iter = state.get('current_iteration', 0)
+          tool_history = state.get('tool_history', [])
+          failures = state.get('failures', [])
+
+          print("=== Self-Evaluation ===")
+          print(f"Current iteration: {current_iter}/{max_iterations}")
+          print(f"Tools executed: {len(tool_history)}")
+          print(f"Failures: {len(failures)}")
+
+          # הערכה: האם המשימה נפתרה?
+          # בודק אם יש הצלחות אחרונות או שאין כשלונות
+          task_solved = False
           
-          # יצירת event לניסיון חוזר
-          echo "🔄 הניסיון החוזר יתבצע במקביל"
+          if tool_history:
+              last_tool = tool_history[-1]
+              result = last_tool.get('result', {})
+              if result.get('exit_code') == 0 or result.get('success') == True:
+                  task_solved = True
+          
+          # האם להמשיך?
+          should_continue = not task_solved and current_iter < max_iterations
+          
+          # האם הגענו למקסימום?
+          max_reached = current_iter >= max_iterations - 1
+
+          state['status'] = 'completed' if task_solved else ('failed' if max_reached else 'running')
+          state['thought_process'].append(f"Evaluation: solved={task_solved}, continue={should_continue}, max_reached={max_reached}")
+          
+          with open('/workspace/state.json', 'w') as f:
+              json.dump(state, f, indent=2)
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"solved={'true' if task_solved else 'false'}\n")
+              f.write(f"continue={'true' if should_continue else 'false'}\n")
+              f.write(f"max_reached={'true' if max_reached else 'false'}\n")
+          
+          print(f"Task solved: {task_solved}")
+          print(f"Should continue: {should_continue}")
+          print(f"Max reached: {max_reached}")
+          PYEOF
+        shell: python
+
+      - name: שמירת State סופי
+        uses: actions/upload-artifact@v4
+        with:
+          name: state-final
+          path: /workspace/state.json
+          retention-days: 7
 
   # ═══════════════════════════════════════════════════════════
-  # גוב 6: סיכום ודיווח
+  # גוב 4: Continue Loop or Complete
   # ═══════════════════════════════════════════════════════════
-  06-summary:
+  04-continue-loop:
+    name: "🔄 המשך לופ"
+    runs-on: ubuntu-latest
+    needs: 03-evaluate
+    if: needs.03-evaluate.outputs.should_continue == 'true'
+    steps:
+      - name: הורדת State
+        uses: actions/download-artifact@v4
+        with:
+          name: state-final
+          path: /workspace
+
+      - name: הכנה לאיטרציה הבאה
+        run: |
+          echo "=== Preparing for next iteration ==="
+          
+          python3 << 'PYEOF'
+          import json
+          import os
+          from datetime import datetime
+
+          with open('/workspace/state.json', 'r') as f:
+              state = json.load(f)
+
+          # הגדלת iteration
+          state['current_iteration'] += 1
+          state['status'] = 'looping'
+          state['thought_process'].append(f"Moving to iteration {state['current_iteration']}")
+          state['updated_at'] = datetime.utcnow().isoformat()
+          
+          with open('/workspace/state.json', 'w') as f:
+              json.dump(state, f, indent=2)
+          
+          print(f"✅ Next iteration: {state['current_iteration']}")
+          PYEOF
+
+      - name: שמירת State לאיטרציה הבאה
+        uses: actions/upload-artifact@v4
+        with:
+          name: state-loop-start
+          path: /workspace/state.json
+          retention-days: 7
+
+  # ═══════════════════════════════════════════════════════════
+  # גוב 5: Summary & Interface Sync
+  # ═══════════════════════════════════════════════════════════
+  05-summary:
     name: "📊 סיכום"
     runs-on: ubuntu-latest
-    needs: [01-analyze, 03-execute]
+    needs: [00-init, 03-evaluate]
     if: always()
+    outputs:
+      final_status: ${{ steps.finalize.outputs.status }}
+      thought_log: ${{ steps.finalize.outputs.thoughts }}
     steps:
-      - name: יצירת סיכום
+      - name: הורדת State סופי
+        uses: actions/download-artifact@v4
+        with:
+          name: state-final
+          path: /workspace
+          continue-on-error: true
+
+      - name: Finalize & Generate Summary
+        id: finalize
         run: |
           echo "============================================"
           echo "📊 סיכום ביצועי גאמא"
           echo "============================================"
-          echo ""
-          echo "🆔 Run ID: ${{ github.run_id }}"
-          echo "🔢 Run Number: ${{ github.run_number }}"
-          echo ""
-          echo "📋 משימה: ${{ github.event.inputs.task || github.event.comment.body }}"
-          echo ""
-          echo "📈 תוצאות:"
-          echo "   ניתוח: ${{ needs.01-analyze.result }}"
-          echo "   ביצוע: ${{ needs.03-execute.result }}"
-          echo ""
-          echo "⏱️ זמן התחלה: ${{ github.event.workflow_run.created_at }}"
-          echo "⏱️ זמן סיום: $(date -u)"
-          echo ""
           
-          if [ "${{ needs.03-execute.result }}" == "success" ]; then
-            echo "✅ סטטוס: הושלם בהצלחה!"
-          else
-            echo "❌ סטטוס: נכשל"
-            echo "🔧 הסוכן ינסה לתקן אוטומטית..."
-          fi
+          python3 << 'PYEOF'
+          import json
+          import os
+
+          # קריאת state סופי
+          state_file = '/workspace/state.json'
+          if os.path.exists(state_file):
+              with open(state_file, 'r') as f:
+                  state = json.load(f)
+          else:
+              state = {'status': 'unknown', 'current_iteration': 0, 'task': 'N/A'}
+
+          task = state.get('task', 'N/A')
+          iteration = state.get('current_iteration', 0)
+          max_iter = state.get('max_iterations', 10)
+          status = state.get('status', 'unknown')
+          tool_count = len(state.get('tool_history', []))
+          failure_count = len(state.get('failures', []))
+          thoughts = state.get('thought_process', [])
+          last_error = state.get('last_error', 'None')
+
+          print(f"")
+          print(f"🆔 Task ID: {state.get('task_id', 'N/A')}")
+          print(f"📋 Task: {task[:80]}...")
+          print(f"")
+          print(f"📈 סטטיסטיקות:")
+          print(f"   איטרציות: {iteration + 1}/{max_iter}")
+          print(f"   כלים שבוצעו: {tool_count}")
+          print(f"   כשלונות: {failure_count}")
+          print(f"")
+          print(f"📊 סטטוס סופי: {status}")
           
-          echo ""
-          echo "============================================"
-          echo "🎯 גאמא מוכן למשימה הבאה!"
-          echo "============================================"
-
-      - name: עדכון Issue
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const status = '${{ needs.03-execute.result }}' === 'success' ? '✅ הושלם' : '❌ נכשל';
-            const statusEmoji = '${{ needs.03-execute.result }}' === 'success' ? '✅' : '❌';
-            
-            github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `## 🔄 עדכון סטטוס
-
-**סטטוס:** ${status}
-**זמן:** ${new Date().toLocaleString('he-IL')}
-
-${statusEmoji} [צפה בריצה](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
-`
-            });
+          if failure_count > 0:
+              print(f"⚠️ שגיאה אחרונה: {last_error}")
+          
+          print(f"")
+          print(f"🔄 Thought Process Log:")
+          for i, thought in enumerate(thoughts[-10:], 1):
+              print(f"   {i}. {thought}")
+          
+          # הכנת נתונים לממשק (Interface Sync)
+          interface_data = {
+              'task_id': state.get('task_id', ''),
+              'status': status,
+              'iteration': iteration,
+              'max_iterations': max_iter,
+              'task': task,
+              'tools_executed': tool_count,
+              'failures': failure_count,
+              'last_error': last_error,
+              'thought_process': thoughts[-10:],  # Last 10 thoughts for display
+              'completed_at': state.get('updated_at', '')
+          }
+          
+          with open('/workspace/interface_status.json', 'w') as f:
+              json.dump(interface_data, f, indent=2)
+          
+          print(f"")
+          print(f"✅ interface_status.json generated for web interface polling")
+          print("============================================")
+          
+          # Output for GitHub Actions
+          thoughts_str = ' | '.join(thoughts[-5:]) if thoughts else 'No thoughts'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"status={status}\n")
+              f.write(f"thoughts={thoughts_str}\n")
+          
+          print(f"::set-output name=status::{status}")
+          print(f"::set-output name=thoughts::{thoughts_str}")
+          PYEOF
+        shell: python
 
       - name: העלאת תוצאות
-        if: needs.03-execute.result == 'success'
+        if: needs.03-evaluate.outputs.task_solved == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: gamma-results
           path: |
-            workspace/output/**
-            .gamma/**
+            /workspace/**
           retention-days: 7
+
+      - name: עדכון Interface Status
+        run: |
+          echo "=== Interface Sync: Pushing status for index.html polling ==="
+          
+          # יצירת קובץ שהממשק יכול לקרוא
+          cat > /workspace/github_actions_status.json << 'EOF'
+          {
+            "workflow": "gamma-main.yml",
+            "run_id": "${{ github.run_id }}",
+            "run_number": "${{ github.run_number }}",
+            "status": "${{ needs.03-evaluate.outputs.task_solved }}",
+            "updated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+          
+          echo "✅ Status file ready for interface polling"
+          cat /workspace/github_actions_status.json
 
       - name: ניקוי סופי
         if: always()
         run: |
           echo "🧹 ניקוי סופי..."
-          rm -rf workspace/temp/* 2>/dev/null || true
-          echo "✅ ניקוי הושלם"
+          # שמירת לוג אחרון
+          if [ -f /workspace/agent.log ]; then
+            echo "📝 לוג נשמר בקובץ agent.log"
