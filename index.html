@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>גאמא - ניהול סוכן AI | GitHub Actions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&family=Orbitron:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-void: #020205;
+            --bg-deep: #050508;
+            --bg-primary: #0a0b10;
+            --bg-secondary: #0f1118;
+            --bg-card: #13151f;
+            --bg-elevated: #181b26;
+            --bg-hover: #1e2130;
+            --accent-gamma: #00d4ff;
+            --accent-gamma-dim: rgba(0, 212, 255, 0.12);
+            --accent-gamma-glow: rgba(0, 212, 255, 0.3);
+            --accent-purple: #7b61ff;
+            --accent-pink: #ff3366;
+            --accent-green: #00ff88;
+            --accent-orange: #ff9500;
+            --text-primary: #ffffff;
+            --text-secondary: #9098a8;
+            --text-muted: #505568;
+            --border-subtle: rgba(255, 255, 255, 0.04);
+            --border-light: rgba(255, 255, 255, 0.08);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Heebo', sans-serif;
+            background: var(--bg-void);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .bg-atmosphere {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .bg-glow {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(100px);
+            opacity: 0.4;
+        }
+
+        .bg-glow-1 {
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, var(--accent-gamma) 0%, transparent 70%);
+            top: -200px;
+            left: -100px;
+            animation: float1 20s ease-in-out infinite;
+        }
+
+        .bg-glow-2 {
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, var(--accent-purple) 0%, transparent 70%);
+            bottom: -150px;
+            right: -100px;
+            animation: float2 25s ease-in-out infinite;
+        }
+
+        .bg-glow-3 {
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, var(--accent-pink) 0%, transparent 70%);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation: float3 15s ease-in-out infinite;
+        }
+
+        @keyframes float1 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(50px, 30px); } }
+        @keyframes float2 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-40px, -20px); } }
+        @keyframes float3 { 0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.2; } 50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.4; } }
+
+        .bg-grid {
+            position: absolute;
+            inset: 0;
+            background-image: 
+                linear-gradient(rgba(0, 212, 255, 0.015) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 212, 255, 0.015) 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+
+        .app {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 32px;
+            background: rgba(5, 5, 8, 0.8);
+            backdrop-filter: blur(30px);
+            border-bottom: 1px solid var(--border-subtle);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo-section { display: flex; align-items: center; gap: 20px; }
+
+        .logo-emblem {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--accent-gamma) 0%, var(--accent-purple) 100%);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 900;
+            font-size: 28px;
+            color: var(--bg-void);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 40px var(--accent-gamma-glow);
+        }
+
+        .logo-emblem::after {
+            content: '';
+            position: absolute;
+            top: -75%;
+            left: -75%;
+            width: 250%;
+            height: 250%;
+            background: linear-gradient(45deg, transparent 40%, rgba(255,255,255,0.5) 50%, transparent 60%);
+            animation: shine 4s infinite;
+        }
+
+        @keyframes shine { 0% { transform: translateX(-100%) rotate(45deg); } 100% { transform: translateX(100%) rotate(45deg); } }
+
+        .logo-info h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 30px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-gamma) 0%, var(--accent-purple) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 4px;
+        }
+
+        .logo-info p {
+            font-size: 11px;
+            color: var(--text-muted);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-top: 6px;
+        }
+
+        .header-controls { display: flex; align-items: center; gap: 20px; }
+
+        .status-panel {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 24px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 40px;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            animation: pulse-ring 2s infinite;
+            box-shadow: 0 0 15px var(--accent-green);
+        }
+
+        @keyframes pulse-ring { 0%, 100% { box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.5); } 50% { box-shadow: 0 0 0 10px rgba(0, 255, 136, 0); } }
+
+        .status-text { font-size: 13px; color: var(--text-secondary); }
+
+        .github-btn {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 13px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .github-btn:hover {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            border-color: var(--accent-gamma);
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .modal-overlay.hidden { display: none; }
+
+        .modal {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 24px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            animation: modal-in 0.4s ease;
+        }
+
+        @keyframes modal-in { from { opacity: 0; transform: scale(0.9) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+
+        .modal h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 24px;
+            margin-bottom: 12px;
+            background: linear-gradient(135deg, var(--accent-gamma) 0%, var(--accent-purple) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .modal p { color: var(--text-secondary); font-size: 14px; line-height: 1.6; margin-bottom: 24px; }
+
+        .token-input {
+            width: 100%;
+            padding: 16px 20px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-family: monospace;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .token-input:focus { border-color: var(--accent-gamma); box-shadow: 0 0 20px var(--accent-gamma-dim); }
+
+        .modal-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, var(--accent-gamma) 0%, var(--accent-purple) 100%);
+            border: none;
+            border-radius: 12px;
+            color: var(--bg-void);
+            font-family: 'Heebo', sans-serif;
+            font-weight: 700;
+            font-size: 15px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .modal-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px var(--accent-gamma-glow); }
+
+        .main-content { display: grid; grid-template-columns: 340px 1fr; flex: 1; gap: 0; }
+
+        .sidebar {
+            background: rgba(10, 11, 16, 0.6);
+            backdrop-filter: blur(20px);
+            border-left: 1px solid var(--border-subtle);
+            padding: 24px;
+            overflow-y: auto;
+            max-height: calc(100vh - 101px);
+        }
+
+        .sidebar-section { margin-bottom: 32px; }
+
+        .section-header {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 10px;
+            color: var(--accent-gamma);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-header::before { content: ''; width: 24px; height: 2px; background: var(--accent-gamma); }
+
+        .task-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 14px;
+            padding: 18px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .task-card:hover { border-color: var(--accent-gamma); transform: translateX(-4px); box-shadow: 0 0 25px var(--accent-gamma-dim); }
+        .task-card.active { border-color: var(--accent-gamma); background: var(--accent-gamma-dim); }
+
+        .task-card-icon { font-size: 24px; margin-bottom: 10px; }
+        .task-card-title { font-weight: 600; font-size: 15px; margin-bottom: 6px; }
+        .task-card-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+
+        .chat-area { display: flex; flex-direction: column; height: calc(100vh - 101px); }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .messages-container::-webkit-scrollbar { width: 6px; }
+        .messages-container::-webkit-scrollbar-track { background: transparent; }
+        .messages-container::-webkit-scrollbar-thumb { background: var(--bg-card); border-radius: 3px; }
+
+        .message {
+            display: flex;
+            gap: 16px;
+            max-width: 80%;
+            animation: msg-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes msg-in { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+        .message.user { align-self: flex-end; flex-direction: row-reverse; }
+
+        .message-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .message.gamma .message-avatar {
+            background: linear-gradient(135deg, var(--accent-gamma) 0%, var(--accent-purple) 100%);
+            color: var(--bg-void);
+            box-shadow: 0 0 25px var(--accent-gamma-glow);
+        }
+
+        .message.user .message-avatar { background: var(--bg-elevated); border: 1px solid var(--border-subtle); font-size: 14px; }
+
+        .message-body {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 18px;
+            padding: 18px 22px;
+            line-height: 1.7;
+        }
+
+        .message.user .message-body { background: var(--bg-elevated); border-color: rgba(0, 212, 255, 0.15); }
+
+        .message-time { font-size: 11px; color: var(--text-muted); margin-top: 10px; }
+
+        .message-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--accent-gamma);
+            text-decoration: none;
+            font-size: 13px;
+            margin-top: 12px;
+            padding: 10px 16px;
+            background: var(--bg-secondary);
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .message-link:hover { background: var(--accent-gamma-dim); }
+
+        .welcome { text-align: center; padding: 60px 40px; animation: fade-in 0.8s ease; }
+
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+        .welcome-emblem {
+            width: 140px;
+            height: 140px;
+            background: linear-gradient(135deg, var(--accent-gamma) 0%, var(--accent-purple) 100%);
+            border-radius: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 900;
+            font-size: 56px;
+            color: var(--bg-void);
+            margin: 0 auto 36px;
+            box-shadow: 0 0 100px var(--accent-gamma-glow);
+            position: relative;
+        }
+
+        .welcome-emblem::after {
+            content: '';
+            position: absolute;
+            inset: -15px;
+            border: 2px solid rgba(0, 212, 255, 0.3);
+            border-radius: 44px;
+            animation: pulse-ring 3s infinite;
+        }
+
+        .welcome h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 36px;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, var(--accent-gamma) 0%, var(--accent-purple) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .welcome p { color: var(--text-secondary); font-size: 16px; max-width: 550px; margin: 0 auto; line-height: 1.8; }
+
+        .welcome-features {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-top: 48px;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            padding: 24px 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover { border-color: var(--accent-gamma); transform: translateY(-4px); }
+
+        .feature-icon { font-size: 32px; margin-bottom: 14px; }
+        .feature-title { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+        .feature-desc { font-size: 12px; color: var(--text-muted); }
+
+        .input-section {
+            padding: 24px 32px;
+            background: rgba(10, 11, 16, 0.8);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .input-container {
+            display: flex;
+            gap: 14px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 18px;
+            padding: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .input-container:focus-within { border-color: var(--accent-gamma); box-shadow: 0 0 35px var(--accent-gamma-dim); }
+
+        .chat-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--text-primary);
+            font-family: 'Heebo', sans-serif;
+            font-size: 15px;
+            padding: 16px 20px;
+            resize: none;
+            min-height: 28px;
+            max-height: 160px;
+            line-height: 1.5;
+        }
+
+        .chat-input::placeholder { color: var(--text-muted); }
+
+        .send-button {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, var(--accent-gamma) 0%, var(--accent-purple) 100%);
+            border: none;
+            border-radius: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            flex-shrink: 0;
+        }
+
+        .send-button:hover { transform: scale(1.06); box-shadow: 0 0 30px var(--accent-gamma-glow); }
+        .send-button:active { transform: scale(0.95); }
+        .send-button svg { width: 24px; height: 24px; fill: var(--bg-void); }
+
+        .typing { display: flex; gap: 6px; padding: 8px 0; }
+
+        .typing span {
+            width: 9px;
+            height: 9px;
+            background: var(--accent-gamma);
+            border-radius: 50%;
+            animation: typing-bounce 1.4s infinite ease-in-out;
+        }
+
+        .typing span:nth-child(1) { animation-delay: 0s; }
+        .typing span:nth-child(2) { animation-delay: 0.2s; }
+        .typing span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing-bounce { 0%, 80%, 100% { transform: scale(0.5); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
+
+        .run-status {
+            background: linear-gradient(135deg, var(--accent-gamma-dim) 0%, rgba(123, 97, 255, 0.1) 100%);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 14px;
+            padding: 16px 20px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .run-spinner {
+            width: 22px;
+            height: 22px;
+            border: 3px solid var(--accent-gamma-dim);
+            border-top-color: var(--accent-gamma);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .run-info { flex: 1; }
+        .run-title { font-weight: 500; font-size: 14px; margin-bottom: 4px; }
+        .run-subtitle { font-size: 12px; color: var(--text-muted); }
+
+        .toast-container {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toast {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: toast-in 0.4s ease, toast-out 0.4s ease 2.6s forwards;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        @keyframes toast-in { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes toast-out { to { opacity: 0; transform: translateY(-20px); } }
+        .toast.success { border-color: var(--accent-green); }
+        .toast.error { border-color: var(--accent-pink); }
+        .toast.warning { border-color: var(--accent-orange); }
+
+        @media (max-width: 1000px) {
+            .main-content { grid-template-columns: 1fr; }
+            .sidebar { display: none; }
+            .welcome-features { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @media (max-width: 600px) {
+            .header { padding: 16px 20px; }
+            .welcome-features { grid-template-columns: 1fr; }
+            .messages-container { padding: 20px; }
+            .input-section { padding: 16px 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-atmosphere">
+        <div class="bg-glow bg-glow-1"></div>
+        <div class="bg-glow bg-glow-2"></div>
+        <div class="bg-glow bg-glow-3"></div>
+        <div class="bg-grid"></div>
+    </div>
+
+    <div class="app">
+        <header class="header">
+            <div class="logo-section">
+                <div class="logo-emblem">Γ</div>
+                <div class="logo-info">
+                    <h1>גאמא</h1>
+                    <p>סוכן AI אוטונומי</p>
+                </div>
+            </div>
+            <div class="header-controls">
+                <div class="status-panel">
+                    <div class="status-indicator"></div>
+                    <span class="status-text">GitHub Actions מקוון</span>
+                </div>
+                <a href="https://github.com/infinityempire/gamma/actions" target="_blank" class="github-btn">
+                    <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+                    </svg>
+                    צפה בריצות
+                </a>
+                <button class="github-btn" onclick="showSettings()">
+                    <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+                    </svg>
+                    הגדרות
+                </button>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <aside class="sidebar">
+                <div class="sidebar-section">
+                    <div class="section-header">סוגי משימות</div>
+                    
+                    <div class="task-card" data-task="אסוף מידע ובצע מחקר מקיף על: ">
+                        <div class="task-card-icon">🔍</div>
+                        <div class="task-card-title">מחקר ואיסוף מידע</div>
+                        <div class="task-card-desc">חיפוש, מחקר ואימות עובדות</div>
+                    </div>
+                    
+                    <div class="task-card" data-task="בנה יישום מלא: ">
+                        <div class="task-card-icon">💻</div>
+                        <div class="task-card-title">פיתוח תוכנה</div>
+                        <div class="task-card-desc">בניית אתרים ויישומים</div>
+                    </div>
+                    
+                    <div class="task-card" data-task="בצע ניתוח נתונים של: ">
+                        <div class="task-card-icon">📊</div>
+                        <div class="task-card-title">ניתוח נתונים</div>
+                        <div class="task-card-desc">עיבוד, הדמיות ודוחות</div>
+                    </div>
+                    
+                    <div class="task-card" data-task="כתוב תוכן מקיף על: ">
+                        <div class="task-card-icon">✍️</div>
+                        <div class="task-card-title">כתיבת תוכן</div>
+                        <div class="task-card-desc">מאמרים, דוחות ותוכן שיווקי</div>
+                    </div>
+                    
+                    <div class="task-card" data-task="תקן את הבעיה הבאה: ">
+                        <div class="task-card-icon">🔧</div>
+                        <div class="task-card-title">תיקון ופתרון בעיות</div>
+                        <div class="task-card-desc">זיהוי ותיקון שגיאות</div>
+                    </div>
+                    
+                    <div class="task-card" data-task="אוטומט את התהליך הבא: ">
+                        <div class="task-card-icon">⚡</div>
+                        <div class="task-card-title">אוטומציה</div>
+                        <div class="task-card-desc">אוטומציה של תהליכי עבודה</div>
+                    </div>
+
+                    <div class="task-card" data-task="בצע: ">
+                        <div class="task-card-icon">🚀</div>
+                        <div class="task-card-title">כל משימה</div>
+                        <div class="task-card-desc">כל משימה שתרצה</div>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="section-header">כלים מהירים</div>
+                    
+                    <div class="task-card" onclick="openGitHub()">
+                        <div class="task-card-icon">🚀</div>
+                        <div class="task-card-title">GitHub Actions</div>
+                        <div class="task-card-desc">צפה בהיסטוריית ריצות</div>
+                    </div>
+                    
+                    <div class="task-card" onclick="openIssues()">
+                        <div class="task-card-icon">📋</div>
+                        <div class="task-card-title">Issues</div>
+                        <div class="task-card-desc">מעקב אחר משימות</div>
+                    </div>
+                    
+                    <div class="task-card" onclick="openRepo()">
+                        <div class="task-card-icon">📁</div>
+                        <div class="task-card-title">הריפו</div>
+                        <div class="task-card-desc">פתח את הריפו ב-GitHub</div>
+                    </div>
+                </div>
+            </aside>
+
+            <section class="chat-area">
+                <div class="messages-container" id="messagesContainer">
+                    <div class="welcome">
+                        <div class="welcome-emblem">Γ</div>
+                        <h2>שלום! אני גאמא</h2>
+                        <p>סוכן בינה מלאכותית אוטונומי המופעל על שרתי GitHub Actions. אני יכול לבצע כל משימה - מחקר, פיתוח, ניתוח, תיקון, אוטומציה ועוד. בזכות כוח העיבוד של GitHub ומנגנון התיקון העצמי, אני לא קורס!</p>
+                        
+                        <div class="welcome-features">
+                            <div class="feature-card">
+                                <div class="feature-icon">⚡</div>
+                                <div class="feature-title">כל משימה</div>
+                                <div class="feature-desc">מסוגל לבצע הכל</div>
+                            </div>
+                            <div class="feature-card">
+                                <div class="feature-icon">🛡️</div>
+                                <div class="feature-title">מוגן מקריסה</div>
+                                <div class="feature-desc">תיקון עצמי אוטומטי</div>
+                            </div>
+                            <div class="feature-card">
+                                <div class="feature-icon">🔄</div>
+                                <div class="feature-title">ניסיונות חוזרים</div>
+                                <div class="feature-desc">עד 3 ניסיונות</div>
+                            </div>
+                            <div class="feature-card">
+                                <div class="feature-icon">💾</div>
+                                <div class="feature-title">Checkpoint</div>
+                                <div class="feature-desc">שמירת מצב אוטומטית</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-section">
+                    <div class="input-container">
+                        <textarea 
+                            class="chat-input" 
+                            id="chatInput" 
+                            placeholder="תאר לי כל משימה שתרצה לבצע... (למשל: 'אסוף מידע על Manus AI' או 'בנה אתר לעסק שלי')"
+                            rows="1"
+                        ></textarea>
+                        <button class="send-button" id="sendButton">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Token Setup Modal -->
+    <div class="modal-overlay" id="tokenModal">
+        <div class="modal">
+            <h2>🔑 הגדרת GitHub Token</h2>
+            <p>כדי לנהל את סוכן גאמא, נדרש GitHub Personal Access Token עם הרשאות repo ו-workflow.</p>
+            <input type="password" class="token-input" id="tokenInput" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 12px;">
+                💡 צור Token ב: GitHub → Settings → Developer settings → Personal access tokens
+            </p>
+            <button class="modal-btn" onclick="saveToken()">שמור והתחל</button>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        const CONFIG = {
+            repoOwner: 'infinityempire',
+            repoName: 'gamma',
+            workflowId: 'gamma-main.yml'
+        };
+
+        let ghToken = localStorage.getItem('gh_token') || '';
+        let isRunning = false;
+
+        const messagesContainer = document.getElementById('messagesContainer');
+        const chatInput = document.getElementById('chatInput');
+        const sendButton = document.getElementById('sendButton');
+        const tokenModal = document.getElementById('tokenModal');
+        const tokenInput = document.getElementById('tokenInput');
+
+        if (!ghToken) { tokenModal.classList.remove('hidden'); }
+
+        chatInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 160) + 'px';
+        });
+
+        sendButton.addEventListener('click', sendMessage);
+        chatInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+        });
+
+        document.querySelectorAll('.task-card[data-task]').forEach(card => {
+            card.addEventListener('click', () => {
+                chatInput.value = card.dataset.task;
+                chatInput.focus();
+            });
+        });
+
+        function saveToken() {
+            const token = tokenInput.value.trim();
+            if (!token) { showToast('נא להזין Token', 'error'); return; }
+            ghToken = token;
+            localStorage.setItem('gh_token', token);
+            tokenModal.classList.add('hidden');
+            showToast('✅ Token נשמר בהצלחה!', 'success');
+        }
+
+        function showSettings() {
+            tokenModal.classList.remove('hidden');
+            tokenInput.value = ghToken;
+        }
+
+        async function sendMessage() {
+            const message = chatInput.value.trim();
+            if (!message || isRunning) return;
+
+            if (!ghToken) {
+                showToast('נדרש GitHub Token', 'error');
+                tokenModal.classList.remove('hidden');
+                return;
+            }
+
+            addMessage(message, 'user');
+            chatInput.value = '';
+            chatInput.style.height = 'auto';
+            showTyping();
+
+            try {
+                await triggerWorkflow(message);
+            } catch (error) {
+                hideTyping();
+                addMessage(`❌ שגיאה: ${error.message}`, 'gamma');
+            }
+        }
+
+        async function triggerWorkflow(task) {
+            const url = `https://api.github.com/repos/${CONFIG.repoOwner}/${CONFIG.repoName}/actions/workflows/${CONFIG.workflowId}/dispatches`;
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${ghToken}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    ref: 'main',
+                    inputs: { task: task, priority: 'normal', max_retries: '3' }
+                })
+            });
+
+            hideTyping();
+
+            if (response.status === 204 || response.ok) {
+                isRunning = true;
+                addMessage(
+                    `✅ המשימה נשלחה לביצוע!\n\n` +
+                    `📋 משימה: "${task}"\n\n` +
+                    `🔄 גאמא מבצע את המשימה על שרתי GitHub Actions...\n\n` +
+                    `🛡️ מנגנוני בטיחות פעילים:\n` +
+                    `   • בדיקת בריאות מערכת\n` +
+                    `   • תיקון עצמי אוטומטי\n` +
+                    `   • ניסיונות חוזרים (עד 3)\n` +
+                    `   • שמירת checkpoint`,
+                    'gamma',
+                    { showLink: true, linkText: 'צפה בריצה ב-GitHub Actions', linkUrl: `https://github.com/${CONFIG.repoOwner}/${CONFIG.repoName}/actions` }
+                );
+                
+                showToast('🚀 המשימה נשלחה לגאמא!', 'success');
+                setTimeout(() => { isRunning = false; }, 5000);
+            } else {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(error.message || `שגיאת HTTP ${response.status}`);
+            }
+        }
+
+        function addMessage(text, type, options = {}) {
+            const welcome = messagesContainer.querySelector('.welcome');
+            if (welcome) welcome.remove();
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            const time = new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+            
+            let linkHtml = '';
+            if (options.showLink) {
+                linkHtml = `<a href="${options.linkUrl}" target="_blank" class="message-link">🔗 ${options.linkText || 'פתח ב-GitHub'}</a>`;
+            }
+            
+            messageDiv.innerHTML = `
+                <div class="message-avatar">${type === 'gamma' ? 'Γ' : '👤'}</div>
+                <div class="message-body">
+                    <div class="message-text">${text.replace(/\n/g, '<br>')}</div>
+                    ${linkHtml}
+                    <div class="message-time">${time}</div>
+                </div>
+            `;
+            
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function showTyping() {
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'message gamma';
+            typingDiv.id = 'typingIndicator';
+            typingDiv.innerHTML = `
+                <div class="message-avatar">Γ</div>
+                <div class="message-body">
+                    <div class="typing"><span></span><span></span><span></span></div>
+                </div>
+            `;
+            messagesContainer.appendChild(typingDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function hideTyping() {
+            const typing = document.getElementById('typingIndicator');
+            if (typing) typing.remove();
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `<span>${type === 'success' ? '✅' : type === 'error' ? '❌' : '⚠️'}</span><span>${message}</span>`;
+            document.getElementById('toastContainer').appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function openGitHub() { window.open(`https://github.com/${CONFIG.repoOwner}/${CONFIG.repoName}/actions`, '_blank'); }
+        function openIssues() { window.open(`https://github.com/${CONFIG.repoOwner}/${CONFIG.repoName}/issues`, '_blank'); }
+        function openRepo() { window.open(`https://github.com/${CONFIG.repoOwner}/${CONFIG.repoName}`, '_blank'); }
+
+        chatInput.focus();
+    </script>
+</body>
+</html>

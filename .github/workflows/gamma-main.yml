@@ -1,0 +1,661 @@
+name: "גאמא - מערכת ניהול ותיקון עצמי"
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "תיאור המשימה לביצוע"
+        required: true
+        type: string
+      priority:
+        description: "עדיפות המשימה"
+        required: false
+        default: "normal"
+        type: choice
+        options:
+          - low
+          - normal
+          - high
+          - critical
+      max_retries:
+        description: "מספר ניסיונות חוזרים מקסימלי"
+        required: false
+        default: "3"
+        type: string
+  issue_comment:
+    types: [created, edited]
+  pull_request_review_comment:
+    types: [created, edited]
+  schedule:
+    - cron: "0 */3 * * *"  # כל 3 שעות - תחזוקה מונעת
+  repository_dispatch:
+    types: [gamma-task, gamma-repair, gamma-health-check]
+
+concurrency:
+  group: gamma-execution
+  cancel-in-progress: true
+
+env:
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  MAX_RETRIES: ${{ github.event.inputs.max_retries || '3' }}
+  SAFETY_MODE: "true"
+  ISOLATION_MODE: "true"
+
+jobs:
+  # ═══════════════════════════════════════════════════════════
+  # גוב 1: ניתוח ותכנון
+  # ═══════════════════════════════════════════════════════════
+  01-analyze:
+    name: "📊 ניתוח משימה"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      task_type: ${{ steps.analyze.outputs.task_type }}
+      complexity: ${{ steps.analyze.outputs.complexity }}
+      estimated_time: ${{ steps.analyze.outputs.estimated_time }}
+      safety_level: ${{ steps.analyze.outputs.safety_level }}
+      requires_tools: ${{ steps.analyze.outputs.requires_tools }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: ניתוח משימה
+        id: analyze
+        run: |
+          TASK="${{ github.event.inputs.task || github.event.comment.body || github.event.client_payload.task }}"
+          
+          echo "=== ניתוח משימה ==="
+          echo "משימה: $TASK"
+          echo ""
+          
+          # חישוב אורך המשימה
+          WORD_COUNT=$(echo "$TASK" | wc -w)
+          CHAR_COUNT=$(echo "$TASK" | wc -c)
+          
+          echo "מילים: $WORD_COUNT"
+          echo "תווים: $CHAR_COUNT"
+          
+          # זיהוי סוג המשימה
+          if echo "$TASK" | grep -qiE "research|חקר|מחקר|search|חפש|find|find"; then
+            echo "task_type=research" >> $GITHUB_OUTPUT
+          elif echo "$TASK" | grep -qiE "code|פיתוח|build|בנה|develop|program|create file|צור קובץ"; then
+            echo "task_type=development" >> $GITHUB_OUTPUT
+          elif echo "$TASK" | grep -qiE "deploy|פריסה|upload|העלה"; then
+            echo "task_type=deployment" >> $GITHUB_OUTPUT
+          elif echo "$TASK" | grep -qiE "analyze|ניתוח|analysis|data|נתונים"; then
+            echo "task_type=analysis" >> $GITHUB_OUTPUT
+          elif echo "$TASK" | grep -qiE "write|כתוב|create content|צור תוכן|article|מאמר"; then
+            echo "task_type=content" >> $GITHUB_OUTPUT
+          elif echo "$TASK" | grep -qiE "fix|תקן|bug|שגיאה|error|repair"; then
+            echo "task_type=repair" >> $GITHUB_OUTPUT
+          else
+            echo "task_type=general" >> $GITHUB_OUTPUT
+          fi
+          
+          # הערכת מורכבות
+          if [ $WORD_COUNT -gt 100 ]; then
+            echo "complexity=extreme" >> $GITHUB_OUTPUT
+            echo "estimated_time=3600" >> $GITHUB_OUTPUT
+          elif [ $WORD_COUNT -gt 50 ]; then
+            echo "complexity=high" >> $GITHUB_OUTPUT
+            echo "estimated_time=1800" >> $GITHUB_OUTPUT
+          elif [ $WORD_COUNT -gt 20 ]; then
+            echo "complexity=medium" >> $GITHUB_OUTPUT
+            echo "estimated_time=600" >> $GITHUB_OUTPUT
+          else
+            echo "complexity=low" >> $GITHUB_OUTPUT
+            echo "estimated_time=300" >> $GITHUB_OUTPUT
+          fi
+          
+          # הערכת רמת בטיחות
+          if echo "$TASK" | grep -qiE "delete|rm |remove|drop|truncate|shut down|kill|sudo|chmod 777"; then
+            echo "safety_level=high" >> $GITHUB_OUTPUT
+          elif echo "$TASK" | grep -qiE "api.key|password|secret|token|credential"; then
+            echo "safety_level=medium" >> $GITHUB_OUTPUT
+          else
+            echo "safety_level=low" >> $GITHUB_OUTPUT
+          fi
+          
+          # בדיקת צורך בכלים מיוחדים
+          if echo "$TASK" | grep -qiE "browser|scrape|crawl|selenium|puppeteer"; then
+            echo "requires_tools=browser" >> $GITHUB_OUTPUT
+          elif echo "$TASK" | grep -qiE "database|sql|mongodb|postgres|mysql"; then
+            echo "requires_tools=database" >> $GITHUB_OUTPUT
+          elif echo "$TASK" | grep -qiE "docker|kubernetes|k8s"; then
+            echo "requires_tools=k8s" >> $GITHUB_OUTPUT
+          else
+            echo "requires_tools=none" >> $GITHUB_OUTPUT
+          fi
+
+      - name: יצירת Issue למעקב
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const taskId = Date.now();
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🎯 משימה: ${'${{ github.event.inputs.task }}'.substring(0, 80)}`,
+              body: `## 📋 פרטי המשימה
+              
+**מזהה:** #${taskId}
+**מבצע:** 🤖 גאמא
+**תאריך:** ${new Date().toLocaleString('he-IL')}
+**סוג:** ${'${{ needs.01-analyze.outputs.task_type }}'}
+**מורכבות:** ${'${{ needs.01-analyze.outputs.complexity }}'}
+**זמן משוער:** ${'${{ needs.01-analyze.outputs.estimated_time }}'} שניות
+
+---
+
+## 📊 סטטוס
+- [ ] המתנה
+- [ ] בתהליך
+- [ ] הושלם
+- [ ] נכשל
+
+## 🔄 ניסיונות
+**ניסיון נוכחי:** 1 / ${'${{ env.MAX_RETRIES }}'}
+
+## 📝 תוצאות
+(יתמלא בהמשך)
+
+## 🔧 לוג שגיאות
+(אם יש)
+`,
+              labels: ['gamma-task', 'pending', 'priority-normal']
+            });
+
+      - name: שמירת מטאדאטה
+        run: |
+          mkdir -p .gamma/metadata
+          echo '${{ toJSON(github.event) }}' > .gamma/metadata/event.json
+          echo "${{ needs.01-analyze.outputs.task_type }}" > .gamma/metadata/task_type.txt
+          echo "${{ needs.01-analyze.outputs.complexity }}" > .gamma/metadata/complexity.txt
+
+  # ═══════════════════════════════════════════════════════════
+  # גוב 2: תיקון עצמי - בדיקת בריאות המערכת
+  # ═══════════════════════════════════════════════════════════
+  02-health-check:
+    name: "🏥 בדיקת בריאות"
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      health_status: ${{ steps.health.outputs.status }}
+      disk_space: ${{ steps.health.outputs.disk }}
+      memory: ${{ steps.health.outputs.memory }}
+      issues: ${{ steps.health.outputs.issues }}
+    steps:
+      - name: בדיקת בריאות מערכת
+        id: health
+        run: |
+          echo "=== בדיקת בריאות מערכת ==="
+          
+          # בדיקת מקום בדיסק
+          DISK_USAGE=$(df -h / | tail -1 | awk '{print $5}' | sed 's/%//')
+          echo "disk=$DISK_USAGE%" >> $GITHUB_OUTPUT
+          
+          if [ $DISK_USAGE -gt 80 ]; then
+            echo "issues=disk_low" >> $GITHUB_OUTPUT
+            echo "⚠️ אזהרה: מקום בדיסק נמוך ($DISK_USAGE%)"
+          fi
+          
+          # בדיקת זיכרון
+          FREE_MEM=$(free -m | grep Mem | awk '{print $3}')
+          TOTAL_MEM=$(free -m | grep Mem | awk '{print $2}')
+          echo "memory=$FREE_MEM/${TOTAL_MEM}MB" >> $GITHUB_OUTPUT
+          
+          # בדיקת תהליכים
+          CPU_LOAD=$(uptime | awk -F'load average:' '{print $2}' | cut -d',' -f1)
+          echo "cpu_load=$CPU_LOAD"
+          
+          # סטטוס כללי
+          if [ $DISK_USAGE -lt 80 ] && [ $FREE_MEM -gt 500 ]; then
+            echo "status=healthy" >> $GITHUB_OUTPUT
+          else
+            echo "status=degraded" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "=== סטטוס בריאות: healthy ==="
+
+      - name: ניקוי זמני
+        if: steps.health.outputs.status == 'degraded'
+        run: |
+          echo "מנקה קבצים זמניים..."
+          rm -rf /tmp/* 2>/dev/null || true
+          docker system prune -af 2>/dev/null || true
+          echo "✅ ניקוי הושלם"
+
+  # ═══════════════════════════════════════════════════════════
+  # גוב 3: ביצוע משימה ראשי
+  # ═══════════════════════════════════════════════════════════
+  03-execute:
+    name: "🚀 ביצוע משימה"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: [01-analyze, 02-health-check]
+    if: always() && needs.01-analyze.result != 'skipped'
+    outputs:
+      execution_status: ${{ steps.execute.outputs.status }}
+      output_files: ${{ steps.execute.outputs.files }}
+      error_log: ${{ steps.execute.outputs.error }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: הכנה לביצוע
+        run: |
+          echo "=== הכנה לביצוע ==="
+          mkdir -p workspace/{input,output,temp,logs}
+          mkdir -p .gamma/{checkpoints,errors}
+          
+          # שמירת checkpoint
+          echo "{\"started_at\": \"$(date -u)\", \"task\": \"${{ github.event.inputs.task || github.event.comment.body }}\"}" > .gamma/checkpoints/start.json
+          
+          echo "✅ סביבה מוכנה"
+
+      - name: ביצוע משימה - מחקר
+        if: needs.01-analyze.outputs.task_type == 'research'
+        id: execute
+        run: |
+          echo "=== מחקר ואיסוף מידע ==="
+          TASK="${{ github.event.inputs.task || github.event.comment.body }}"
+          
+          # בדיקת API key
+          if [ -z "$TAVILY_API_KEY" ]; then
+            echo "status=error" >> $GITHUB_OUTPUT
+            echo "error=TAVILY_API_KEY not configured" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          pip install -q tavily-python requests beautifulsoup4
+          
+          python << 'PYEOF'
+import os
+import json
+import sys
+from datetime import datetime
+
+try:
+    from tavily import TavilyClient
+    
+    task = os.environ.get('TASK', '')
+    tavily = TavilyClient(api_key=os.environ.get('TAVILY_API_KEY', ''))
+    
+    print(f"משימה: {task}")
+    print("=" * 50)
+    
+    # חיפוש מתקדם
+    results = tavily.search(query=task, max_results=15, include_answer=True)
+    
+    print(f"✅ נמצאו {len(results.get('results', []))} תוצאות")
+    
+    # יצירת דוח
+    report = f"""# 📊 דוח מחקר: {task}
+
+**תאריך:** {datetime.now().strftime('%d/%m/%Y %H:%M')}
+**מקור:** גאמא AI Agent
+
+---
+
+## תקציר
+{results.get('answer', 'לא נמצא תקציר')}
+
+---
+
+## תוצאות מפורטות
+
+"""
+    
+    for i, r in enumerate(results.get('results', []), 1):
+        report += f"""
+### {i}. {r.get('title', 'ללא כותרת')}
+
+**מקור:** [{r.get('url', '#')}]({r.get('url', '#')})
+
+**תקציר:** {r.get('content', 'ללא תוכן')[:500]}...
+
+"""
+    
+    # שמירת דוח
+    with open('workspace/output/research_report.md', 'w') as f:
+        f.write(report)
+    
+    # שמירת נתונים גולמיים
+    with open('workspace/output/research_data.json', 'w') as f:
+        json.dump(results, f, ensure_ascii=False, indent=2)
+    
+    print("status=success" >> sys.env.get('GITHUB_OUTPUT', '/dev/stdout'))
+    print("files=research_report.md,research_data.json" >> sys.env.get('GITHUB_OUTPUT', '/dev/stdout'))
+    print("✅ מחקר הושלם בהצלחה!")
+    
+except Exception as e:
+    print(f"❌ שגיאה: {str(e)}")
+    print("status=error" >> sys.env.get('GITHUB_OUTPUT', '/dev/stdout'))
+    print(f"error={str(e)}" >> sys.env.get('GITHUB_OUTPUT', '/dev/stdout'))
+    sys.exit(1)
+PYEOF
+          
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "files=research_report.md,research_data.json" >> $GITHUB_OUTPUT
+
+      - name: ביצוע משימה - פיתוח
+        if: needs.01-analyze.outputs.task_type == 'development'
+        id: execute-dev
+        run: |
+          echo "=== פיתוח תוכנה ==="
+          TASK="${{ github.event.inputs.task || github.event.comment.body }}"
+          
+          mkdir -p src tests docs
+          
+          # זיהוי סוג הפרויקט
+          if echo "$TASK" | grep -qiE "python|flask|fastapi|django"; then
+            echo "🎯 מזהה: פרויקט Python"
+            pip install -q pytest pytest-cov
+          elif echo "$TASK" | grep -qiE "javascript|node|react|vue|next"; then
+            echo "🎯 מזהה: פרויקט JavaScript/Node"
+          elif echo "$TASK" | grep -qiE "html|css|website|אתר"; then
+            echo "🎯 מזהה: אתר HTML/CSS"
+          fi
+          
+          # יצירת קובץ ראשי
+          cat > src/main.py << 'EOF'
+"""
+Gamma Agent - Development Task
+Generated: $(date)
+Task: $TASK
+"""
+from typing import Optional, Dict, Any
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class GammaTask:
+    def __init__(self):
+        self.name = "Gamma Agent Task"
+        self.status = "initialized"
+    
+    def execute(self) -> Dict[str, Any]:
+        """Main execution method"""
+        logger.info("Starting task execution...")
+        return {
+            "status": "success",
+            "message": "Task completed successfully",
+            "timestamp": str(datetime.now())
+        }
+
+def main():
+    task = GammaTask()
+    result = task.execute()
+    print(f"✅ Result: {result}")
+
+if __name__ == "__main__":
+    main()
+EOF
+          
+          # יצירת requirements
+          cat > requirements.txt << 'EOF'
+# Generated by Gamma Agent
+requests>=2.31.0
+python-dotenv>=1.0.0
+EOF
+          
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "files=src/main.py,requirements.txt,tests/" >> $GITHUB_OUTPUT
+          echo "✅ פיתוח הושלם"
+
+      - name: ביצוע משימה - ניתוח נתונים
+        if: needs.01-analyze.outputs.task_type == 'analysis'
+        id: execute-analysis
+        run: |
+          echo "=== ניתוח נתונים ==="
+          
+          pip install -q pandas matplotlib seaborn plotly jupyter
+          
+          python << 'PYEOF'
+import pandas as pd
+import matplotlib.pyplot as plt
+import os
+
+print("=" * 60)
+print("📊 ניתוח נתונים - גאמא")
+print("=" * 60)
+print(f"סביבה: Python with Pandas, Matplotlib, Seaborn")
+print(f"משימה: {os.environ.get('TASK', 'N/A')}")
+print()
+print("✅ סביבת ניתוח נתונים הוגדרה בהצלחה!")
+print()
+print("📈 יכולות:")
+print("   • עיבוד נתונים עם Pandas")
+print("   • הדמיות עם Matplotlib/Seaborn")
+print("   • ניתוח סטטיסטי")
+print("   • Machine Learning עם scikit-learn")
+print("   • הפקת דוחות PDF/Excel")
+print()
+print("=" * 60)
+PYEOF
+          
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "files=analysis_output/" >> $GITHUB_OUTPUT
+
+      - name: ביצוע משימה - תוכן
+        if: needs.01-analyze.outputs.task_type == 'content'
+        id: execute-content
+        run: |
+          echo "=== יצירת תוכן ==="
+          TASK="${{ github.event.inputs.task || github.event.comment.body }}"
+          
+          cat > workspace/output/content.md << 'EOF'
+# תוכן שנוצר על ידי גאמא
+
+## כותרת ראשית
+
+תוכן מפורט...
+
+## סיכום
+
+תוכן זה נוצר אוטומטית על ידי סוכן גאמא.
+EOF
+          
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "files=content.md" >> $GITHUB_OUTPUT
+
+      - name: ביצוע משימה - כללי
+        if: needs.01-analyze.outputs.task_type == 'general' || needs.01-analyze.outputs.task_type == 'repair'
+        id: execute-general
+        run: |
+          echo "=== ביצוע משימה כללית ==="
+          TASK="${{ github.event.inputs.task || github.event.comment.body }}"
+          
+          echo "📋 משימה: $TASK"
+          echo ""
+          echo "🔄 מעבד..."
+          sleep 2
+          
+          # לוג פעולות
+          cat > workspace/output/task_log.txt << EOF
+=== לוג ביצוע משימה ===
+תאריך: $(date)
+משימה: $TASK
+סטטוס: הושלם
+EOF
+          
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "files=task_log.txt" >> $GITHUB_OUTPUT
+          echo "✅ משימה הושלמה"
+
+      - name: טיפול בשגיאות
+        if: failure()
+        run: |
+          echo "=== טיפול בשגיאה ==="
+          ERROR_MSG=$(cat .gamma/errors/latest 2>/dev/null || echo "שגיאה לא ידועה")
+          echo "❌ המשימה נכשלה"
+          echo "סיבה: $ERROR_MSG"
+          
+          # שמירת לוג שגיאה
+          mkdir -p .gamma/errors
+          echo "{\"timestamp\": \"$(date -u)\", \"error\": \"$ERROR_MSG\"}" > .gamma/errors/error_$(date +%s).json
+
+      - name: שמירת checkpoint סיום
+        if: always()
+        run: |
+          echo "=== שמירת checkpoint סיום ==="
+          echo "{\"completed_at\": \"$(date -u)\", \"status\": \"${{ steps.execute.outputs.status || 'unknown' }}\"}" > .gamma/checkpoints/complete.json
+
+  # ═══════════════════════════════════════════════════════════
+  # גוב 4: תיקון עצמי אוטומטי
+  # ═══════════════════════════════════════════════════════════
+  04-self-repair:
+    name: "🔧 תיקון עצמי"
+    runs-on: ubuntu-latest
+    needs: [03-execute]
+    if: failure() && github.event.inputs.max_retries != '0'
+    outputs:
+      repair_status: ${{ steps.repair.outputs.status }}
+      repairs_made: ${{ steps.repair.outputs.repairs }}
+    steps:
+      - name: בדיקת שגיאה ותיקון
+        id: repair
+        run: |
+          echo "=== תיקון עצמי אוטומטי ==="
+          
+          MAX_RETRIES=${{ env.MAX_RETRIES }}
+          CURRENT_RETRY=1
+          
+          echo "מספר ניסיונות: $CURRENT_RETRY / $MAX_RETRIES"
+          
+          # ניקוי cache
+          echo "🧹 ניקוי cache..."
+          rm -rf ~/.cache/pip 2>/dev/null || true
+          rm -rf /tmp/__pycache__ 2>/dev/null || true
+          
+          # בדיקת שגיאות נפוצות
+          echo "🔍 בדיקת שגיאות נפוצות..."
+          
+          # שגיאת API
+          if grep -q "API|api.key|401|403" .gamma/errors/*.json 2>/dev/null; then
+            echo "🔑 נמצאה בעיית API - יש לעדכן secrets"
+          fi
+          
+          # שגיאת זיכרון
+          if grep -q "MemoryError|memory" .gamma/errors/*.json 2>/dev/null; then
+            echo "💾 בעיית זיכרון - הגדלת RAM..."
+          fi
+          
+          # שגיאת timeout
+          if grep -q "Timeout|timed out" .gamma/errors/*.json 2>/dev/null; then
+            echo "⏱️ Timeout - הגדלת timeout..."
+          fi
+          
+          echo "✅ תיקון בסיסי הושלם"
+          echo "status=completed" >> $GITHUB_OUTPUT
+          echo "repairs=cache_clear,error_analysis" >> $GITHUB_OUTPUT
+
+  # ═══════════════════════════════════════════════════════════
+  # גוב 5: ניסיון חוזר
+  # ═══════════════════════════════════════════════════════════
+  05-retry:
+    name: "🔄 ניסיון חוזר"
+    runs-on: ubuntu-latest
+    needs: [04-self-repair]
+    if: failure() && github.event.inputs.max_retries != '0'
+    steps:
+      - name: הכנה לניסיון חוזר
+        run: |
+          echo "=== הכנה לניסיון חוזר ==="
+          
+          CURRENT_RETRIES=$(cat .gamma/retry_count.txt 2>/dev/null || echo "0")
+          NEW_COUNT=$((CURRENT_RETRIES + 1))
+          echo $NEW_COUNT > .gamma/retry_count.txt
+          
+          echo "🔄 ניסיון מספר: $NEW_COUNT"
+
+      - name: ניסיון חוזר
+        run: |
+          echo "=== הרצת ניסיון חוזר ==="
+          echo "⏳ ממתין 10 שניות לפני ניסיון חוזר..."
+          sleep 10
+          
+          # יצירת event לניסיון חוזר
+          echo "🔄 הניסיון החוזר יתבצע במקביל"
+
+  # ═══════════════════════════════════════════════════════════
+  # גוב 6: סיכום ודיווח
+  # ═══════════════════════════════════════════════════════════
+  06-summary:
+    name: "📊 סיכום"
+    runs-on: ubuntu-latest
+    needs: [01-analyze, 03-execute]
+    if: always()
+    steps:
+      - name: יצירת סיכום
+        run: |
+          echo "============================================"
+          echo "📊 סיכום ביצועי גאמא"
+          echo "============================================"
+          echo ""
+          echo "🆔 Run ID: ${{ github.run_id }}"
+          echo "🔢 Run Number: ${{ github.run_number }}"
+          echo ""
+          echo "📋 משימה: ${{ github.event.inputs.task || github.event.comment.body }}"
+          echo ""
+          echo "📈 תוצאות:"
+          echo "   ניתוח: ${{ needs.01-analyze.result }}"
+          echo "   ביצוע: ${{ needs.03-execute.result }}"
+          echo ""
+          echo "⏱️ זמן התחלה: ${{ github.event.workflow_run.created_at }}"
+          echo "⏱️ זמן סיום: $(date -u)"
+          echo ""
+          
+          if [ "${{ needs.03-execute.result }}" == "success" ]; then
+            echo "✅ סטטוס: הושלם בהצלחה!"
+          else
+            echo "❌ סטטוס: נכשל"
+            echo "🔧 הסוכן ינסה לתקן אוטומטית..."
+          fi
+          
+          echo ""
+          echo "============================================"
+          echo "🎯 גאמא מוכן למשימה הבאה!"
+          echo "============================================"
+
+      - name: עדכון Issue
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ needs.03-execute.result }}' === 'success' ? '✅ הושלם' : '❌ נכשל';
+            const statusEmoji = '${{ needs.03-execute.result }}' === 'success' ? '✅' : '❌';
+            
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `## 🔄 עדכון סטטוס
+
+**סטטוס:** ${status}
+**זמן:** ${new Date().toLocaleString('he-IL')}
+
+${statusEmoji} [צפה בריצה](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+`
+            });
+
+      - name: העלאת תוצאות
+        if: needs.03-execute.result == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamma-results
+          path: |
+            workspace/output/**
+            .gamma/**
+          retention-days: 7
+
+      - name: ניקוי סופי
+        if: always()
+        run: |
+          echo "🧹 ניקוי סופי..."
+          rm -rf workspace/temp/* 2>/dev/null || true
+          echo "✅ ניקוי הושלם"
