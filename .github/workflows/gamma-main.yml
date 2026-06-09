@@ -216,7 +216,7 @@ jobs:
               f.write(f"tool={tool}\n")
               f.write(f"args={json.dumps(args)}\n")
           PYEOF
-        shell: python
+        shell: bash
 
       - name: Execute Tool
         id: execute
@@ -327,7 +327,7 @@ jobs:
           print(f"::set-output name=iteration::{iteration}")
           print(f"::set-output name=success::{str(success).lower()}")
           PYEOF
-        shell: python
+        shell: bash
 
       - name: שמירת checkpoint
         if: always()
@@ -432,7 +432,7 @@ jobs:
           
           print(f"::set-output name=diagnosis::{diagnosis}")
           PYEOF
-        shell: python
+        shell: bash
 
       - name: Patch Script
         id: repair
@@ -598,7 +598,7 @@ jobs:
           print(f"Should continue: {should_continue}")
           print(f"Max reached: {max_reached}")
           PYEOF
-        shell: python
+        shell: bash
 
       - name: שמירת State סופי
         uses: actions/upload-artifact@v4
@@ -749,7 +749,7 @@ jobs:
           print(f"::set-output name=status::{status}")
           print(f"::set-output name=thoughts::{thoughts_str}")
           PYEOF
-        shell: python
+        shell: bash
 
       - name: העלאת תוצאות
         if: needs.evaluate.outputs.task_solved == 'true'
