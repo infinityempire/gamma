@@ -87,29 +87,40 @@ jobs:
           TASK_ID=$(uuidgen)
           TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ")
           
-          # Escape task for JSON
-          TASK_ESCAPED=$(echo "$TASK" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
-          
-          # 4. Create/Update state.json
-          cat > ${{ github.workspace }}/state.json << EOF
-          {
-            "task_id": "$TASK_ID",
-            "current_iteration": 0,
-            "max_iterations": ${{ env.MAX_ITERATIONS }},
-            "task": $TASK_ESCAPED,
-            "status": "initialized",
-            "thought_process": [],
-            "tool_history": [],
-            "failures": [],
-            "partial_results": {},
-            "last_error": null,
-            "workspace": "${{ github.workspace }}",
-            "is_continuation": $IS_CONTINUATION,
-            "created_at": "$TIMESTAMP",
-            "updated_at": "$TIMESTAMP"
+          # 4. Create/Update state.json using Python for proper JSON escaping
+          python3 << 'PYEOF'
+          import json
+          import os
+
+          task = os.environ.get('TASK', '')
+          task_id = os.environ.get('TASK_ID', '')
+          timestamp = os.environ.get('TIMESTAMP', '')
+          is_continuation = os.environ.get('IS_CONTINUATION', 'false')
+          max_iterations = os.environ.get('MAX_ITERATIONS', '10')
+          workspace_dir = os.environ.get('WORKSPACE_DIR', '')
+
+          state = {
+              "task_id": task_id,
+              "current_iteration": 0,
+              "max_iterations": int(max_iterations) if max_iterations.isdigit() else 10,
+              "task": task,
+              "status": "initialized",
+              "thought_process": [],
+              "tool_history": [],
+              "failures": [],
+              "partial_results": {},
+              "last_error": None,
+              "workspace": workspace_dir,
+              "is_continuation": is_continuation == 'true',
+              "created_at": timestamp,
+              "updated_at": timestamp
           }
-          EOF
-          
+
+          output_path = os.path.join(workspace_dir, 'state.json')
+          with open(output_path, 'w', encoding='utf-8') as f:
+              json.dump(state, f, ensure_ascii=False, indent=2)
+          print("✅ state.json created")
+          PYEOF
           echo "task_id=$TASK_ID" >> $GITHUB_OUTPUT
           echo "is_continuation=$IS_CONTINUATION" >> $GITHUB_OUTPUT
           
