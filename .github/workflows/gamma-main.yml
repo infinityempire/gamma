@@ -7,6 +7,21 @@ on:
         description: "Task"
         required: true
         type: string
+      priority:
+        description: "Priority"
+        required: false
+        default: "normal"
+        type: string
+      max_retries:
+        description: "Max retries"
+        required: false
+        default: "3"
+        type: string
+      max_iterations:
+        description: "Max iterations"
+        required: false
+        default: "5"
+        type: string
 
 jobs:
   run:
