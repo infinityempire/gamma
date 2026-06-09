@@ -75,14 +75,29 @@ response_text = ""
 def update_interface_status(phase, task_name, status, thought_process=""):
     """Updates the interface_status.json file for real-time UI polling."""
     try:
+        # Get current step info (with safe defaults)
+        current_step = state.get("current_directive_step", 0) or 0
+        directive_plan = state.get("directive_plan") or []
+        total_steps = len(directive_plan)
+        current_step_name = state.get("current_step_name", "") or ""
+        completed_steps = state.get("completed_steps") or []
+        
+        # Calculate progress
+        progress_percent = int((current_step / total_steps * 100)) if total_steps > 0 else (100 if phase == "COMPLETED" else 0)
+        
         # Standalone UI expects specific fields in the JSON
         status_data = {
             "phase": phase,
             "task": task_name,
             "status": status,
+            "current_step": current_step,
+            "total_steps": total_steps,
+            "current_step_name": current_step_name,
+            "completed_steps": completed_steps,
             "thought_process": thoughts + [thought_process] if thought_process else thoughts,
-            "iteration": state.get("current_directive_step", 0) if state.get("directive_plan") else 1,
-            "max_iterations": len(state.get("directive_plan", [])) if state.get("directive_plan") else 1,
+            "iteration": current_step if total_steps > 0 else 1,
+            "max_iterations": total_steps if total_steps > 0 else 1,
+            "progress_percent": progress_percent,
             "tools_executed": len(tools_used),
             "failures": state.get("failures", 0),
             "last_error": state.get("last_error", ""),
@@ -388,32 +403,71 @@ def main():
         # Initialize response_text if resuming from a saved state
         if not response_text and step_idx > 0:
             response_text = state.get("response", "")
-            
+        
+        # Track completed steps for visibility
+        completed_steps = []
+        
         while step_idx < len(plan):
             step = plan[step_idx]
-            update_interface_status("EXECUTION", step["action"], "Running", f"Executing step {step_idx+1}/{len(plan)}")
+            
+            # Update status BEFORE execution
+            update_interface_status("EXECUTION", step["action"], f"Running [{step_idx+1}/{len(plan)}]", f"Step {step_idx+1}: {step['action']}")
+            
+            # Print progress immediately (GitHub Actions will show this)
+            print(f"\n{'='*60}", flush=True)
+            print(f"📍 STEP {step_idx+1}/{len(plan)}: {step['action']}", flush=True)
+            print(f"{'='*60}", flush=True)
             
             # Execute with self-healing (retry logic)
             step_success = False
             for attempt in range(3):
                 try:
+                    print(f"⏳ Executing command...", flush=True)
                     res = execute_command(step["command"])
+                    
+                    # Show result immediately
+                    print(f"✅ Step {step_idx+1} completed!", flush=True)
+                    print(f"📋 Result: {res[:200]}...", flush=True)
+                    
                     response_text += f"\n### Step {step_idx+1}: {step['action']}\n{res}\n"
+                    completed_steps.append(step["action"])
                     step_success = True
+                    
+                    # Update status after successful execution
+                    update_interface_status("EXECUTION", step["action"], f"✅ DONE [{step_idx+1}/{len(plan)}]", f"Completed: {step['action']}")
+                    
+                    # Save state after each step (so user can see progress)
+                    state["current_directive_step"] = step_idx + 1
+                    state["completed_steps"] = completed_steps
+                    state["current_step_name"] = step["action"]
+                    save_state()
+                    
                     break
                 except Exception as e:
-                    if attempt == 2:
+                    if attempt < 2:
+                        print(f"⚠️ Attempt {attempt+1} failed, retrying...", flush=True)
+                    else:
+                        print(f"❌ Step {step_idx+1} failed after 3 attempts: {e}", flush=True)
                         response_text += f"\n❌ Step {step_idx+1} failed after 3 attempts: {e}\n"
             
             step_idx += 1
-            state["current_directive_step"] = step_idx
-            save_state()
             
             if not step_success:
+                update_interface_status("FAILED", step["action"], "FAILED", f"Step {step_idx} failed!")
                 break
-        else:
-            response_text += "\n✅ כל שלבי ההנחיה הושלמו."
+            
+            # Print separator between steps
+            print(f"\n✅ Step {step_idx} COMPLETED - Moving to next step...\n", flush=True)
+        
+        if step_idx >= len(plan):
+            print(f"\n{'='*60}", flush=True)
+            print("🎉 ALL STEPS COMPLETED!", flush=True)
+            print(f"{'='*60}", flush=True)
+            
+            update_interface_status("COMPLETED", "All Steps", "Finished", f"Completed {len(completed_steps)} steps successfully")
+            response_text += f"\n✅ כל שלבי ההנחיה הושלמו ({len(completed_steps)} שלבים)."
             state["directive_plan"] = None
+            state["completed_steps"] = completed_steps
             save_state()
     else:
         # Standard single task

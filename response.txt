@@ -1,0 +1,14 @@
+
+### Step 1: 🔄 Sync-State - סנכרון מצב
+✅ בוצע: git fetch origin && cat state.json
+
+### Step 2: 📊 Status-Report - דוח סטטוס
+✅ בוצע: git status && ls -la
+
+### Step 3: 🔐 Token Audit - בדיקת אבטחה
+✅ בוצע: echo 'GH_TOKEN exists:' && test -n $GH_TOKEN && echo 'YES' || echo 'NO'
+
+### Step 4: 🧹 Maintenance-Cleanup - ניקוי
+✅ בוצע: rm -f /workspace/*.log /workspace/temp_* 2>/dev/null; echo 'Cleanup done'
+
+✅ כל שלבי ההנחיה הושלמו (4 שלבים).
