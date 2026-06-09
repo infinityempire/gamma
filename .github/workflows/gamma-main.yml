@@ -39,16 +39,19 @@ jobs:
         run: |
           TASK="${{ github.event.inputs.task }}"
           TASK_ID=$(uuidgen)
+          # Escape the task for JSON - handle quotes and special chars
+          TASK_ESCAPED=$(echo "$TASK" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
           cat > ${{ github.workspace }}/state.json << EOF
           {
             "task_id": "$TASK_ID",
-            "task": "$TASK",
+            "task": $TASK_ESCAPED,
             "status": "running",
             "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           }
           EOF
           echo "task_id=$TASK_ID" >> $GITHUB_OUTPUT
           echo "State file created"
+          echo "Task length: $(echo $TASK | wc -c)"
 
       - name: Setup Python
         uses: actions/setup-python@v5

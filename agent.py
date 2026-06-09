@@ -380,6 +380,17 @@ def execute_command(cmd, depth=0):
 def main():
     global response_text
     
+    # Debug: Print workspace and state info
+    print(f"📁 Workspace: {workspace}", flush=True)
+    print(f"📋 State file: {state_file}", flush=True)
+    print(f"📄 State exists: {os.path.exists(state_file)}", flush=True)
+    
+    # Ensure state file exists
+    if not os.path.exists(state_file):
+        print("⚠️ State file not found, creating...", flush=True)
+        with open(state_file, "w", encoding="utf-8") as f:
+            json.dump({"task": "default", "status": "initializing"}, f)
+    
     update_interface_status("INITIALIZING", "Agent Startup", "Running", "Gamma v2.0 is starting up.")
     
     # 1. Check for Alias Indexing command
@@ -488,12 +499,32 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
+        import traceback
         error_msg = f"CRITICAL_FAILURE: {str(e)}"
+        tb = traceback.format_exc()
         print(f"\n{error_msg}", flush=True)
-        update_interface_status("ERROR", "Main Execution", "Failed", error_msg)
-        state["status"] = "failed"
-        state["last_error"] = error_msg
-        save_state()
-        with open(response_file, "w", encoding="utf-8") as f:
-            f.write(f"❌ המשימה נכשלה: {str(e)}")
+        print(f"Traceback: {tb}", flush=True)
+        
+        # Try to update status even if error occurred
+        try:
+            update_interface_status("ERROR", "Main Execution", "Failed", error_msg)
+        except:
+            pass
+        
+        # Try to save state
+        try:
+            if 'state' in dir():
+                state["status"] = "failed"
+                state["last_error"] = error_msg
+                save_state()
+        except:
+            pass
+        
+        # Try to write response
+        try:
+            with open(response_file, "w", encoding="utf-8") as f:
+                f.write(f"❌ המשימה נכשלה: {str(e)}\n\n{tb}")
+        except:
+            pass
+        
         sys.exit(1)
