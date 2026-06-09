@@ -120,47 +120,48 @@ def handle_command(text):
         filename = "myfile.txt"
         content = "Hello from Gamma!"
         
-        # Try to find filename
-        name_patterns = ["בשם", "named", "שם", "file named", "filename"]
-        for p in name_patterns:
+        # Try to find filename - check for "בשם" or "named" pattern
+        name_found = False
+        for p in ["בשם", "named", "שם", "file named", "filename"]:
             if p in text_lower:
-                parts = text_lower.split(p)
-                if len(parts) > 1:
-                    remaining = parts[1].strip()
-                    # Get filename until "with" or end
-                    if "with" in remaining:
-                        filename = remaining.split("with")[0].strip()
-                        content = remaining.split("with")[1].strip()
-                    else:
-                        filename = remaining.split()[0] if remaining.split() else "myfile.txt"
-        
-        # Try to find content
-        content_patterns = ["with", "תוכן", "content", "שכתוב", "write"]
-        for p in content_patterns:
-            if p in text_lower:
-                parts = text_lower.split(p)
-                if len(parts) > 1:
-                    content = parts[1].strip().split()[0] if parts[1].strip().split() else "Hello!"
+                idx = text_lower.find(p)
+                remaining = text_lower[idx + len(p):].strip()
+                # Find where content starts
+                for sep in ["with", "עם", "תוכן", "שכתוב"]:
+                    if sep in remaining:
+                        filename = remaining.split(sep)[0].strip()
+                        content = remaining.split(sep)[1].strip()
+                        name_found = True
+                        break
+                if not name_found:
+                    # Get just the filename (first word)
+                    words = remaining.split()
+                    if words:
+                        filename = words[0]
+                break
         
         # Clean filename
-        filename = filename.replace(" ", "_").replace('"', '').replace("'", "")
+        filename = filename.replace(" ", "_").replace('"', '').replace("'", "").replace(",", "").replace(".", "")
+        
+        # If content wasn't extracted, try to find "עם" in original text
+        if content == "Hello from Gamma!" and "עם" in original_task:
+            parts = original_task.split("עם")
+            if len(parts) > 1:
+                content = parts[1].strip()
+                # Clean content - remove trailing punctuation
+                content = content.rstrip(".,!?")
         
         try:
             filepath = os.path.join(workspace, filename)
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(content)
             
-            tools_used.append(f"Create file: {filename}")
-            thoughts.append(f"יצרתי קובץ בשם {filename}")
+            tools_used.append("Create file: " + filename)
+            thoughts.append("יצרתי קובץ בשם " + filename)
             
-            return f"""✅ **נוצר קובץ חדש!**
-
-📄 **שם הקובץ:** `{filename}`
-📝 **התוכן:** `{content}`
-
-הקובץ נשמר בהצלחה! 🎉"""
+            return "✅ נוצר קובץ חדש!\n\n📄 שם: " + filename + "\n📝 תוכן: " + content + "\n\nהקובץ נשמר בהצלחה! 🎉"
         except Exception as e:
-            return f"❌ שגיאה ביצירת הקובץ: {str(e)}"
+            return "❌ שגיאה ביצירת הקובץ: " + str(e)
     
     # ==========================================
     # VERSION CHECKS - Natural Language
