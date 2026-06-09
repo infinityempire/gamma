@@ -408,9 +408,15 @@ elif "run " in text_lower:
     print("⚡ Detected: RUN COMMAND", flush=True)
     thoughts.append("פקודת run - מבצע")
     response_text = handle_command(original_task, text_lower, thoughts, tools_used)
+
+# Check for WEB SEARCH before questions (things like "who is", "what is", "מי זה", etc.)
+elif any(p in text_lower for p in ["who is", "what is", "מי זה", "מה זה", "חפש", "search", "google", "גוגל", "top 5", "הכי פופולרי", "popular ai tools"]):
+    print("🔍 Detected: WEB SEARCH", flush=True)
+    thoughts.append("זה חיפוש באינטרנט - אחפש עבורו")
+    response_text = handle_command(original_task, text_lower, thoughts, tools_used)
     
 # FINALLY check for questions
-elif any(q in original_task.lower() for q in ["מה", "איך", "למה", "מי", "היכן", "?", "what", "how", "why", "who"]):
+elif any(q in original_task.lower() for q in ["מה", "איך", "למה", "היכן", "?", "what", "how", "why"]):
     print("🎯 Detected: QUESTION", flush=True)
     thoughts.append("זו שאלה - מחפש תשובה")
     response_text = handle_question(original_task)
