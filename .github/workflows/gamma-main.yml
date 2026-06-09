@@ -1,235 +1,36 @@
-name: "גאמא - מערכת ניהול ותיקון עצמי מתקדמת"
+name: "Gamma Agent"
 
 on:
   workflow_dispatch:
     inputs:
       task:
-        description: "תיאור המשימה לביצוע"
+        description: "Task"
         required: true
         type: string
-      max_iterations:
-        description: "מספר איטרציות מקסימלי"
-        required: false
-        default: "5"
-        type: string
-
-env:
-  GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  MAX_RETRIES: "3"
-  SELF_HEALING: "enabled"
 
 jobs:
-  # ═══════════════════════════════════════════════════════════
-  # Job 1: Initialize - Create state.json and run agent
-  # ═══════════════════════════════════════════════════════════
-  initialize:
-    name: "🚀 אתחול והרצה"
+  run:
     runs-on: ubuntu-latest
-    outputs:
-      task_id: ${{ steps.init.outputs.task_id }}
-      success: ${{ steps.run.outputs.success }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Initialize State
-        id: init
+      - uses: actions/checkout@v4
+      - name: Init
         run: |
-          echo "============================================"
-          echo "🚀 אתחול סביבת גאמא"
-          echo "============================================"
-          
-          TASK="${{ github.event.inputs.task }}"
-          TASK_ID=$(uuidgen)
-          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          
-          cat > ${{ github.workspace }}/state.json << EOF
-          {
-            "task_id": "$TASK_ID",
-            "current_iteration": 0,
-            "max_iterations": ${{ github.event.inputs.max_iterations || '5' }},
-            "task": "$TASK",
-            "status": "running",
-            "thought_process": ["משימה התקבלה: $TASK"],
-            "tool_history": [],
-            "failures": [],
-            "created_at": "$TIMESTAMP"
-          }
-          EOF
-          
-          echo "task_id=$TASK_ID" >> $GITHUB_OUTPUT
-          
-          echo "✅ אתחול הושלם!"
-          echo "   Task ID: $TASK_ID"
-          echo "   משימה: ${TASK:0:50}..."
-
+          echo "task_id=$(uuidgen)" >> $GITHUB_OUTPUT
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-
+          python-version: "3.11"
       - name: Run Agent
-        id: run
         run: |
-          python3 << 'PYEOF'
-          import json
-          import os
-          import subprocess
-          from datetime import datetime
-
-          workspace = os.environ.get('GITHUB_WORKSPACE', '.')
-          state_file = os.path.join(workspace, 'state.json')
-          log_file = os.path.join(workspace, 'agent.log')
-
-          def log(msg, level="INFO"):
-              timestamp = datetime.utcnow().isoformat()
-              entry = f"[{timestamp}] [{level}] {msg}"
-              print(entry, flush=True)
-              with open(log_file, 'a') as f:
-                  f.write(entry + '\n')
-
-          # Load state
-          with open(state_file, 'r') as f:
-              state = json.load(f)
-
-          task = state.get('task', '').lower()
-          iteration = state.get('current_iteration', 0)
-          max_iter = int(state.get('max_iterations', 5))
-
-          log(f"=== Dynamic Tool Selection - Iteration {iteration}/{max_iter} ===")
-          log(f"משימה: {task}")
-
-          thoughts = []
-          
-          # Tool Selection Heuristics
-          if any(kw in task for kw in ['create', 'write', 'file', 'צור', 'כתוב']):
-              tool = 'terminal'
-              cmd = f'echo "Gamma: Creating output for task: {task[:30]}" > {workspace}/output.txt'
-              thoughts.append(f"נבחר terminal ליצירת output")
-          elif any(kw in task for kw in ['run', 'execute', 'echo', 'הרץ']):
-              tool = 'terminal'
-              if 'echo' in task:
-                  cmd = 'echo "Hello from Gamma Agent!"'
-              elif 'npm' in task:
-                  cmd = 'npm --version'
-              elif 'python' in task:
-                  cmd = 'python3 --version'
-              else:
-                  cmd = f'echo "Executing: {task[:50]}"'
-              thoughts.append(f"נבחר terminal להרצת פקודה")
-          else:
-              tool = 'terminal'
-              cmd = f'echo "Gamma Agent: {task[:50]}"'
-              thoughts.append(f"משימה כללית - ברירת מחדל: terminal")
-
-          log(f"נבחר כלי: {tool}")
-          log(f"פקודה: {cmd}")
-          log("מחשבות: " + " | ".join(thoughts))
-
-          # Execute
-          try:
-              result = subprocess.run(
-                  cmd, shell=True, cwd=workspace,
-                  capture_output=True, text=True, timeout=120
-              )
-              
-              log(f"תוצאה: exit_code={result.returncode}")
-              log(f"stdout: {result.stdout[:200]}")
-              
-              success = result.returncode == 0
-              error = result.stderr if result.returncode != 0 else None
-              
-          except subprocess.TimeoutExpired:
-              log("ERROR: Timeout expired", "ERROR")
-              success = False
-              error = "Timeout"
-          except Exception as e:
-              log(f"ERROR: {e}", "ERROR")
-              success = False
-              error = str(e)
-
-          # Update state
-          state['tool_history'].append({
-              'iteration': iteration,
-              'tool': tool,
-              'success': success,
-              'timestamp': datetime.utcnow().isoformat()
-          })
-          state['thought_process'].extend(thoughts)
-          state['status'] = 'completed' if success else 'failed'
-          
-          if error:
-              state['last_error'] = error
-              state['failures'].append({
-                  'iteration': iteration,
-                  'error': error,
-                  'timestamp': datetime.utcnow().isoformat()
-              })
-
-          with open(state_file, 'w') as f:
-              json.dump(state, f, indent=2)
-
-          log(f"סטטוס סופי: {state['status']}")
-          
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-              f.write(f"success={str(success).lower()}\n")
-          PYEOF
-        shell: bash
-
-      - name: Upload Results
+          python3 ${{ github.workspace }}/agent.py
+      - name: Summary
+        run: |
+          echo "=== Summary ==="
+          cat ${{ github.workspace }}/state.json
+      - name: Upload
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gamma-results
-          path: ${{ github.workspace }}/**
+          path: ${{ github.workspace }}/*
           retention-days: 7
-
-  # ═══════════════════════════════════════════════════════════
-  # Job 2: Summary
-  # ═══════════════════════════════════════════════════════════
-  summary:
-    name: "📊 סיכום"
-    runs-on: ubuntu-latest
-    needs: initialize
-    if: always()
-    steps:
-      - name: Download Results
-        uses: actions/download-artifact@v4
-        with:
-          name: gamma-results
-          path: ${{ github.workspace }}
-          continue-on-error: true
-
-      - name: Generate Summary
-        run: |
-          echo "============================================"
-          echo "📊 סיכום ביצועי גאמא"
-          echo "============================================"
-          
-          if [ -f "${{ github.workspace }}/state.json" ]; then
-            cat ${{ github.workspace }}/state.json | python3 -c "
-import sys, json
-try:
-    state = json.load(sys.stdin)
-    print()
-    print(f'🆔 Task ID: {state.get(\"task_id\", \"N/A\")}')
-    print(f'📋 משימה: {state.get(\"task\", \"N/A\")[:60]}...')
-    print()
-    print(f'📈 סטטיסטיקות:')
-    print(f'   איטרציות: {state.get(\"current_iteration\", 0) + 1}/{state.get(\"max_iterations\", \"N/A\")}')
-    print(f'   כלים שבוצעו: {len(state.get(\"tool_history\", []))}')
-    print(f'   כשלונות: {len(state.get(\"failures\", []))}')
-    print()
-    print(f'📊 סטטוס: {state.get(\"status\", \"unknown\")}')
-    print()
-    print(f'🔄 תהליך חשיבה:')
-    for i, t in enumerate(state.get('thought_process', [])[:5], 1):
-        print(f'   {i}. {t}')
-except: pass
-"
-          fi
-          
-          echo ""
-          echo "============================================"
-          echo "🎯 גאמא מוכן למשימה הבאה!"
-          echo "============================================"
