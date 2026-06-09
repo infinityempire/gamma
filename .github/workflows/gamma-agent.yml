@@ -71,21 +71,21 @@ jobs:
           if [ -f "${{ github.workspace }}/state.json" ]; then
             echo "📂 Found existing state.json - Loading..."
             # Use Python to properly parse JSON with multiline strings
-            python3 << 'PREVEOF'
-            import json
-            import os
-            try:
-                with open(os.path.join(os.environ.get('WORKSPACE_DIR', '.'), 'state.json'), 'r') as f:
-                    state = json.load(f)
-                prev_task = state.get('task', '')[:80]
-                prev_iter = state.get('current_iteration', 0)
-                prev_failures = len([d for d in state.get('failures', []) if d.get('diagnosis')])
-                print(f'   Previous Task: {prev_task}...')
-                print(f'   Previous Iteration: {prev_iter}')
-                print(f'   Previous Failures: {prev_failures}')
-            except Exception as e:
-                print(f"   Could not load state: {e}")
-            PREVEOF
+            python3 << 'PYEOF'
+import json
+import os
+try:
+    with open(os.path.join(os.environ.get('WORKSPACE_DIR', '.'), 'state.json'), 'r') as f:
+        state = json.load(f)
+    prev_task = state.get('task', '')[:80]
+    prev_iter = state.get('current_iteration', 0)
+    prev_failures = len([d for d in state.get('failures', []) if d.get('diagnosis')])
+    print(f'   Previous Task: {prev_task}...')
+    print(f'   Previous Iteration: {prev_iter}')
+    print(f'   Previous Failures: {prev_failures}')
+except Exception as e:
+    print(f"   Could not load state: {e}")
+PYEOF
             IS_CONTINUATION="true"
           else
             echo "📝 No previous state - Starting fresh"
