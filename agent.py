@@ -229,7 +229,7 @@ def handle_command(text, text_lower=None, thoughts=None, tools_used=None):
                 import urllib.parse
                 import urllib.request
                 
-                # Try Wikipedia
+                # Strategy 1: Try Wikipedia with the query
                 wiki_query = urllib.parse.quote(search_q.replace(" ", "_"))
                 wiki_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{wiki_query}"
                 
@@ -247,7 +247,7 @@ def handle_command(text, text_lower=None, thoughts=None, tools_used=None):
             except:
                 pass
             
-            # Try DuckDuckGo
+            # Strategy 2: Try DuckDuckGo JSON API
             try:
                 encoded_query = urllib.parse.quote(search_q)
                 api_url = f"https://api.duckduckgo.com/?q={encoded_query}&format=json&no_html=1"
@@ -287,6 +287,32 @@ def handle_command(text, text_lower=None, thoughts=None, tools_used=None):
                         return output
             except:
                 pass
+        
+        # Strategy 3: If we have AI tool names, search for each one separately
+        ai_tools = ["LangChain", "AutoGPT", "CrewAI", "AutoGen", "LlamaIndex", "Semantic Kernel"]
+        found_info = []
+        
+        for tool in ai_tools:
+            if tool.lower() in search_q.lower():
+                # Try to get info about this specific tool
+                try:
+                    wiki_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{tool}"
+                    req = urllib.request.Request(wiki_url, headers={"User-Agent": "GammaAgent/1.0"})
+                    with urllib.request.urlopen(req, timeout=10) as response:
+                        data = json.loads(response.read().decode())
+                        if data.get("type") != "not-found":
+                            found_info.append(f"**{data.get('title')}:** {data.get('extract', '')[:200]}")
+                except:
+                    pass
+        
+        if found_info:
+            output = "🔍 **תוצאות חיפוש עבור:** " + query + "\n\n"
+            output += "📋 **מידע על כלי AI שנמצא:**\n\n"
+            for info in found_info:
+                output += f"• {info}\n"
+            output += "\n💡 למידע נוסף, חפש כל כלי בנפרד."
+            tools_used.append("Web search (AI tools)")
+            return output
         
         return "🔍 מצטער, לא הצלחתי לחפש באינטרנט. נסה שאלה אחרת."
     
