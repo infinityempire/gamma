@@ -294,27 +294,38 @@ def handle_general(text):
 או פשוט שאל אותי שאלה! 😊"""
 
 # ==========================================
-# MAIN LOGIC
+# MAIN LOGIC - ORDER MATTERS!
 # ==========================================
 
 print("\n--- THINKING ---", flush=True)
 
-# Detect input type
-question_words = ["מה", "איך", "למה", "מי", "היכן", "מתי", "האם", "כמה", "what", "how", "why", "who", "where", "when", "is", "are", "can", "do", "does", "?"]
-command_words = ["run", "execute", "create", "write", "delete", "install", "build", "check", "list", "הרץ", "צור", "התקן", "בנה"]
+# DETECT INPUT TYPE - Check commands BEFORE questions!
+version_patterns = ["מה גרסת", "npm version", "גרסת npm", "גרסת node", "node version", "גרסת python", "python version", "גרסת git", "git version"]
+command_patterns = ["צור קובץ", "create file", "תיצור", "צור טקסט", "list files", "מה יש", "אילו קבצים", "git status"]
 
-is_question_input = any(q in task for q in question_words)
-is_command_input = any(c in task for c in command_words)
-
-if is_question_input:
-    print("🎯 Detected: QUESTION", flush=True)
-    thoughts.append("זו שאלה - מחפש תשובה מתאימה")
-    response_text = handle_question(original_task)
+# Check for version request FIRST
+if any(p in text_lower for p in version_patterns):
+    print("📋 Detected: VERSION CHECK", flush=True)
+    thoughts.append("זו בקשת גרסה - אבדוק את הגרסה")
+    response_text = handle_command(original_task)
     
-elif is_command_input:
+# Check for file/command operations SECOND
+elif any(p in text_lower for p in command_patterns):
     print("⚡ Detected: COMMAND", flush=True)
     thoughts.append("זו פקודה - מבצע")
     response_text = handle_command(original_task)
+
+# THEN check for simple "run" command
+elif "run " in text_lower:
+    print("⚡ Detected: RUN COMMAND", flush=True)
+    thoughts.append("פקודת run - מבצע")
+    response_text = handle_command(original_task)
+    
+# FINALLY check for questions
+elif any(q in task for q in ["מה", "איך", "למה", "מי", "היכן", "?", "what", "how", "why", "who"]):
+    print("🎯 Detected: QUESTION", flush=True)
+    thoughts.append("זו שאלה - מחפש תשובה")
+    response_text = handle_question(original_task)
     
 else:
     print("💬 Detected: GENERAL", flush=True)
