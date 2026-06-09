@@ -51,22 +51,13 @@ jobs:
           python3 ${{ github.workspace }}/agent.py
       - name: Summary
         run: |
-          echo "=== GAMMA AGENT RESPONSE ==="
-          if [ -f ${{ github.workspace }}/response.txt ]; then
+          echo "=== GAMMA AGENT COMPLETE ==="
+          if [ -f response.txt ]; then
             echo ""
-            cat ${{ github.workspace }}/response.txt
-            echo ""
+            cat response.txt
           fi
-          echo "=== STATE ==="
-          cat ${{ github.workspace }}/state.json | python3 -c "
-import sys, json
-try:
-    s = json.load(sys.stdin)
-    print(f'Status: {s.get(\"status\", \"N/A\")}')
-    print(f'Type: {s.get(\"task_type\", \"N/A\")}')
-    print(f'Thoughts: {len(s.get(\"thought_process\", []))} items')
-except: pass
-"
+          echo ""
+          echo "Status: $(cat state.json | grep status | head -1 | cut -d'\"' -f4)"
       - name: Upload
         if: always()
         uses: actions/upload-artifact@v4
