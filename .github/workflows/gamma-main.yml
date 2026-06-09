@@ -4,9 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       task:
-        description: "Task / משימה"
+        description: 'Task to execute'
         required: true
-        type: string
+        default: 'echo Hello'
+      max_retries:
+        description: 'Maximum number of retries for failed jobs'
+        required: false
+        default: '3'
+      max_iterations:
+        description: 'Maximum number of iterations for the loop'
+        required: false
+        default: '10'
       priority:
         description: "Priority / עדיפות"
         required: false
@@ -42,6 +50,8 @@ jobs:
         shell: python
         env:
           INPUT_TASK: ${{ github.event.inputs.task }}
+          INPUT_RETRIES: ${{ github.event.inputs.max_retries }}
+          INPUT_ITERATIONS: ${{ github.event.inputs.max_iterations }}
           WORKSPACE: ${{ github.workspace }}
         run: |
           import json
@@ -50,11 +60,15 @@ jobs:
           from datetime import datetime
 
           task = os.environ.get("INPUT_TASK", "מצב מערכת")
+          retries = os.environ.get("INPUT_RETRIES", "3")
+          iterations = os.environ.get("INPUT_ITERATIONS", "10")
           workspace = os.environ.get("WORKSPACE", ".")
           
           state = {
               "task_id": str(uuid.uuid4()),
               "task": task,
+              "max_retries": int(retries),
+              "max_iterations": int(iterations),
               "status": "running",
               "created_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
           }
@@ -74,6 +88,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
+          MAX_RETRIES: ${{ github.event.inputs.max_retries }}
+          MAX_ITERATIONS: ${{ github.event.inputs.max_iterations }}
 
       - name: Summary
         if: always()

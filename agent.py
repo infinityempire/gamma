@@ -532,7 +532,8 @@ def main():
         # Track completed steps for visibility
         completed_steps = []
         
-        while step_idx < len(plan):
+        max_iterations = state.get("max_iterations", len(plan))
+        while step_idx < len(plan) and step_idx < max_iterations:
             step = plan[step_idx]
             
             # Update status BEFORE execution
@@ -545,9 +546,10 @@ def main():
             
             # Execute with self-healing (retry logic)
             step_success = False
-            for attempt in range(3):
+            max_retries = state.get("max_retries", 3)
+            for attempt in range(max_retries):
                 try:
-                    print(f"⏳ Executing command...", flush=True)
+                    print(f"⏳ Executing command (Attempt {attempt+1}/{max_retries})...", flush=True)
                     res = execute_command(step["command"])
                     
                     # Show result immediately
