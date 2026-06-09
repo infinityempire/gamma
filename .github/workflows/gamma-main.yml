@@ -48,9 +48,9 @@ env:
   MAX_ITERATIONS: ${{ github.event.inputs.max_iterations || '10' }}
   SELF_HEALING: "enabled"
   CHECKPOINT_ENABLED: "true"
-  WORKSPACE_DIR: /workspace
-  STATE_FILE: /workspace/state.json
-  LOG_FILE: /workspace/agent.log
+  WORKSPACE_DIR: $GITHUB_WORKSPACE
+  STATE_FILE: $GITHUB_WORKSPACE/state.json
+  LOG_FILE: $GITHUB_WORKSPACE/agent.log
   DIAGNOSTIC_LINES: "50"
   STATUS_URL: ""  # URL לעדכוני סטטוס לממשק
 
@@ -74,21 +74,21 @@ jobs:
           echo "🚀 אתחול סביבת גאמא"
           echo "============================================"
           
-          # 1. Workspace Isolation - וידוא שכל הפעולות בתיקייה /workspace בלבד
+          # 1. Workspace Isolation - וידוא שכל הפעולות בתיקייה $GITHUB_WORKSPACE בלבד
           echo "📁 הגדרת Workspace Isolation..."
-          mkdir -p /workspace
-          cd /workspace
-          echo "✅ Workspace מוגדר: /workspace"
+          mkdir -p $GITHUB_WORKSPACE
+          cd $GITHUB_WORKSPACE
+          echo "✅ Workspace מוגדר: $GITHUB_WORKSPACE"
           
           # 2. קריאת state.json קודם אם קיים (Persistence)
           TASK_ID=""
           STATE_LOADED="false"
           
-          if [ -f "/workspace/state.json" ]; then
+          if [ -f "$GITHUB_WORKSPACE/state.json" ]; then
             echo "📂 נמצא state.json קודם - טוען מידע..."
-            PREV_TASK=$(cat /workspace/state.json | grep -o '"task": "[^"]*"' | head -1 | cut -d'"' -f4)
-            PREV_ITERATION=$(cat /workspace/state.json | grep -o '"current_iteration": [0-9]*' | cut -d':' -f2 | tr -d ' ')
-            PREV_FAILURES=$(cat /workspace/state.json | grep -o '"failures": \[[^]]*\]' | grep -o '"[^"]*"' | wc -l)
+            PREV_TASK=$(cat $GITHUB_WORKSPACE/state.json | grep -o '"task": "[^"]*"' | head -1 | cut -d'"' -f4)
+            PREV_ITERATION=$(cat $GITHUB_WORKSPACE/state.json | grep -o '"current_iteration": [0-9]*' | cut -d':' -f2 | tr -d ' ')
+            PREV_FAILURES=$(cat $GITHUB_WORKSPACE/state.json | grep -o '"failures": \[[^]]*\]' | grep -o '"[^"]*"' | wc -l)
             
             echo "   משימה קודמת: $PREV_TASK"
             echo "   איטרציה קודמת: $PREV_ITERATION"
@@ -103,7 +103,7 @@ jobs:
           NEW_TASK_ID=$(uuidgen)
           TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           
-          cat > /workspace/state.json << EOF
+          cat > $GITHUB_WORKSPACE/state.json << EOF
           {
             "task_id": "$NEW_TASK_ID",
             "current_iteration": 0,
@@ -115,7 +115,7 @@ jobs:
             "failures": [],
             "partial_results": {},
             "last_error": null,
-            "workspace": "/workspace",
+            "workspace": "$GITHUB_WORKSPACE",
             "created_at": "$TIMESTAMP",
             "updated_at": "$TIMESTAMP",
             "previous_state_loaded": $STATE_LOADED
@@ -135,7 +135,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: state-initial
-          path: /workspace/state.json
+          path: $GITHUB_WORKSPACE/state.json
           retention-days: 7
 
   # ═══════════════════════════════════════════════════════════
@@ -156,7 +156,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: state-initial
-          path: /workspace
+          path: $GITHUB_WORKSPACE
 
       - name: Dynamic Tool Selection
         id: select_tool
@@ -167,7 +167,7 @@ jobs:
           import os
 
           # קריאת state
-          with open('/workspace/state.json', 'r') as f:
+          with open('$GITHUB_WORKSPACE/state.json', 'r') as f:
               state = json.load(f)
 
           task = state.get('task', '').lower()
@@ -207,7 +207,7 @@ jobs:
           
           # שמירת thought process
           state['thought_process'].extend(thoughts)
-          with open('/workspace/state.json', 'w') as f:
+          with open('$GITHUB_WORKSPACE/state.json', 'w') as f:
               json.dump(state, f, indent=2)
           
           # Output
@@ -231,11 +231,11 @@ jobs:
           TOOL_ARGS_JSON='${{ steps.select_tool.outputs.args }}'
           MAX_RETRIES = int(os.environ.get('MAX_RETRIES', '3'))
 
-          with open('/workspace/state.json', 'r') as f:
+          with open('$GITHUB_WORKSPACE/state.json', 'r') as f:
               state = json.load(f)
 
           iteration = state.get('current_iteration', 0)
-          log_file = '/workspace/agent.log'
+          log_file = '$GITHUB_WORKSPACE/agent.log'
 
           def log(msg, level="INFO"):
               timestamp = datetime.utcnow().isoformat()
@@ -251,7 +251,7 @@ jobs:
               """הרצת פקודת terminal"""
               try:
                   result = subprocess.run(
-                      command, shell=True, cwd='/workspace',
+                      command, shell=True, cwd='$GITHUB_WORKSPACE',
                       capture_output=True, text=True, timeout=300
                   )
                   return {
@@ -268,9 +268,9 @@ jobs:
           def run_file_editor(action, path, content=''):
               """פעולות file_editor"""
               try:
-                  full_path = os.path.join('/workspace', path.lstrip('/'))
+                  full_path = os.path.join('$GITHUB_WORKSPACE', path.lstrip('/'))
                   # Workspace Isolation - בדיקת בטיחות
-                  if not full_path.startswith('/workspace'):
+                  if not full_path.startswith('$GITHUB_WORKSPACE'):
                       return {'tool': 'file_editor', 'error': 'Path outside workspace', 'success': False}
                   
                   os.makedirs(os.path.dirname(full_path), exist_ok=True)
@@ -317,7 +317,7 @@ jobs:
               'timestamp': datetime.utcnow().isoformat()
           })
           
-          with open('/workspace/state.json', 'w') as f:
+          with open('$GITHUB_WORKSPACE/state.json', 'w') as f:
               json.dump(state, f, indent=2)
 
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
@@ -334,7 +334,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: state-checkpoint
-          path: /workspace/state.json
+          path: $GITHUB_WORKSPACE/state.json
           retention-days: 7
 
   # ═══════════════════════════════════════════════════════════
@@ -353,7 +353,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: state-checkpoint
-          path: /workspace
+          path: $GITHUB_WORKSPACE
 
       - name: Diagnostic Routine
         id: diagnose
@@ -365,13 +365,13 @@ jobs:
 
           DIAGNOSTIC_LINES = int(os.environ.get('DIAGNOSTIC_LINES', '50'))
 
-          with open('/workspace/state.json', 'r') as f:
+          with open('$GITHUB_WORKSPACE/state.json', 'r') as f:
               state = json.load(f)
 
           print("=== Diagnostic Routine - ניתוח כשלון ===")
           
           # 1. חילוץ 50 השורות האחרונות של הלוג
-          log_file = '/workspace/agent.log'
+          log_file = '$GITHUB_WORKSPACE/agent.log'
           if os.path.exists(log_file):
               with open(log_file, 'r') as f:
                   lines = f.readlines()
@@ -424,7 +424,7 @@ jobs:
           state['last_error'] = diagnosis
           state['status'] = 'diagnosing'
           
-          with open('/workspace/state.json', 'w') as f:
+          with open('$GITHUB_WORKSPACE/state.json', 'w') as f:
               json.dump(state, f, indent=2)
           
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
@@ -444,14 +444,14 @@ jobs:
           import os
           from datetime import datetime
 
-          with open('/workspace/state.json', 'r') as f:
+          with open('$GITHUB_WORKSPACE/state.json', 'r') as f:
               state = json.load(f)
 
           diagnosis = state.get('last_error', '')
           repair_status = 'no_patch_needed'
           
-          # Workspace Isolation - תיקון רק בתוך /workspace
-          repair_script = '/workspace/auto_repair.py'
+          # Workspace Isolation - תיקון רק בתוך $GITHUB_WORKSPACE
+          repair_script = '$GITHUB_WORKSPACE/auto_repair.py'
           
           # יצירת סקריפט תיקון אוטומטי
           repair_code = f'''#!/usr/bin/env python3
@@ -482,7 +482,7 @@ jobs:
           state['status'] = 'repairing'
           state['thought_process'].append(f"Auto-repair script created: {repair_script}")
           
-          with open('/workspace/state.json', 'w') as f:
+          with open('$GITHUB_WORKSPACE/state.json', 'w') as f:
               json.dump(state, f, indent=2)
           
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
@@ -499,7 +499,7 @@ jobs:
           import json
           import os
 
-          with open('/workspace/state.json', 'r') as f:
+          with open('$GITHUB_WORKSPACE/state.json', 'r') as f:
               state = json.load(f)
 
           # עדכון iteration
@@ -507,7 +507,7 @@ jobs:
           state['status'] = 'retrying'
           state['thought_process'].append(f"Re-attempting - Iteration {state['current_iteration']}")
           
-          with open('/workspace/state.json', 'w') as f:
+          with open('$GITHUB_WORKSPACE/state.json', 'w') as f:
               json.dump(state, f, indent=2)
           
           print(f"✅ Will re-attempt at iteration {state['current_iteration']}")
@@ -517,7 +517,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: state-repaired
-          path: /workspace/state.json
+          path: $GITHUB_WORKSPACE/state.json
           retention-days: 7
 
   # ═══════════════════════════════════════════════════════════
@@ -536,7 +536,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: state-repaired
-          path: /workspace
+          path: $GITHUB_WORKSPACE
           continue-on-error: true
 
       - name: Download latest checkpoint
@@ -544,7 +544,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: state-checkpoint
-          path: /workspace
+          path: $GITHUB_WORKSPACE
           continue-on-error: true
 
       - name: Self-Evaluation
@@ -554,7 +554,7 @@ jobs:
           import json
           import os
 
-          with open('/workspace/state.json', 'r') as f:
+          with open('$GITHUB_WORKSPACE/state.json', 'r') as f:
               state = json.load(f)
 
           max_iterations = int(os.environ.get('MAX_ITERATIONS', '10'))
@@ -586,7 +586,7 @@ jobs:
           state['status'] = 'completed' if task_solved else ('failed' if max_reached else 'running')
           state['thought_process'].append(f"Evaluation: solved={task_solved}, continue={should_continue}, max_reached={max_reached}")
           
-          with open('/workspace/state.json', 'w') as f:
+          with open('$GITHUB_WORKSPACE/state.json', 'w') as f:
               json.dump(state, f, indent=2)
 
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
@@ -604,7 +604,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: state-final
-          path: /workspace/state.json
+          path: $GITHUB_WORKSPACE/state.json
           retention-days: 7
 
   # ═══════════════════════════════════════════════════════════
@@ -620,7 +620,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: state-final
-          path: /workspace
+          path: $GITHUB_WORKSPACE
 
       - name: הכנה לאיטרציה הבאה
         run: |
@@ -631,7 +631,7 @@ jobs:
           import os
           from datetime import datetime
 
-          with open('/workspace/state.json', 'r') as f:
+          with open('$GITHUB_WORKSPACE/state.json', 'r') as f:
               state = json.load(f)
 
           # הגדלת iteration
@@ -640,7 +640,7 @@ jobs:
           state['thought_process'].append(f"Moving to iteration {state['current_iteration']}")
           state['updated_at'] = datetime.utcnow().isoformat()
           
-          with open('/workspace/state.json', 'w') as f:
+          with open('$GITHUB_WORKSPACE/state.json', 'w') as f:
               json.dump(state, f, indent=2)
           
           print(f"✅ Next iteration: {state['current_iteration']}")
@@ -650,7 +650,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: state-loop-start
-          path: /workspace/state.json
+          path: $GITHUB_WORKSPACE/state.json
           retention-days: 7
 
   # ═══════════════════════════════════════════════════════════
@@ -669,7 +669,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: state-final
-          path: /workspace
+          path: $GITHUB_WORKSPACE
           continue-on-error: true
 
       - name: Finalize & Generate Summary
@@ -684,7 +684,7 @@ jobs:
           import os
 
           # קריאת state סופי
-          state_file = '/workspace/state.json'
+          state_file = '$GITHUB_WORKSPACE/state.json'
           if os.path.exists(state_file):
               with open(state_file, 'r') as f:
                   state = json.load(f)
@@ -733,7 +733,7 @@ jobs:
               'completed_at': state.get('updated_at', '')
           }
           
-          with open('/workspace/interface_status.json', 'w') as f:
+          with open('$GITHUB_WORKSPACE/interface_status.json', 'w') as f:
               json.dump(interface_data, f, indent=2)
           
           print(f"")
@@ -757,7 +757,7 @@ jobs:
         with:
           name: gamma-results
           path: |
-            /workspace/**
+            $GITHUB_WORKSPACE/**
           retention-days: 7
 
       - name: עדכון Interface Status
@@ -765,7 +765,7 @@ jobs:
           echo "=== Interface Sync: Pushing status for index.html polling ==="
           
           # יצירת קובץ שהממשק יכול לקרוא
-          cat > /workspace/github_actions_status.json << 'EOF'
+          cat > $GITHUB_WORKSPACE/github_actions_status.json << 'EOF'
           {
             "workflow": "gamma-main.yml",
             "run_id": "${{ github.run_id }}",
@@ -776,12 +776,12 @@ jobs:
           EOF
           
           echo "✅ Status file ready for interface polling"
-          cat /workspace/github_actions_status.json
+          cat $GITHUB_WORKSPACE/github_actions_status.json
 
       - name: ניקוי סופי
         if: always()
         run: |
           echo "🧹 ניקוי סופי..."
           # שמירת לוג אחרון
-          if [ -f /workspace/agent.log ]; then
+          if [ -f $GITHUB_WORKSPACE/agent.log ]; then
             echo "📝 לוג נשמר בקובץ agent.log"
