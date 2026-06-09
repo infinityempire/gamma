@@ -168,89 +168,99 @@ def handle_command(text, text_lower=None, thoughts=None, tools_used=None):
             except Exception as e:
                 print(f"Tavily error: {e}", flush=True)
         
-        # Fallback: use Wikipedia API + DuckDuckGo
-        try:
-            import urllib.parse
-            import urllib.request
-            
-            # Clean query - remove Hebrew, keep English parts
-            clean_query = query
-            # Try to translate common Hebrew to English
-            translations = {
-                "כלי אוטומציה": "automation tools",
-                "בינה מלאכותית": "AI",
-                "פופולרי": "popular",
-                "2026": "2026",
-                "יוני": "June",
-                "כמו": "",
-                "על": "",
-                "הכי": "best",
-            }
-            for heb, eng in translations.items():
-                clean_query = clean_query.replace(heb, eng)
-            clean_query = clean_query.strip()
-            
-            # First try Wikipedia with English query
-            if clean_query:
-                wiki_query = urllib.parse.quote(clean_query.replace(" ", "_"))
+        # Try multiple search strategies
+        search_queries = []
+        
+        # Strategy 1: Clean the query - remove Hebrew, keep English
+        clean_query = query
+        translations = {
+            "כלי אוטומציה": "AI automation tools",
+            "בינה מלאכותית": "AI",
+            "פופולרי": "popular",
+            "2026": "2026",
+            "יוני": "June",
+            "כמו": "",
+            "על": "",
+            "הכי": "best",
+            "5 ה": "top 5",
+            "את 5 הכלים": "top 5 AI tools",
+            "את האינטרנט ו": "",
+            "סרוק": "search for",
+        }
+        for heb, eng in translations.items():
+            clean_query = clean_query.replace(heb, eng)
+        clean_query = clean_query.strip()
+        if clean_query:
+            search_queries.append(clean_query)
+        
+        # Strategy 2: If original has English, use it directly
+        if any(c.isascii() and c.isalpha() for c in query):
+            search_queries.append(query)
+        
+        # Try each query
+        for search_q in search_queries:
+            try:
+                import urllib.parse
+                import urllib.request
+                
+                # Try Wikipedia
+                wiki_query = urllib.parse.quote(search_q.replace(" ", "_"))
                 wiki_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{wiki_query}"
                 
-                try:
-                    req = urllib.request.Request(wiki_url, headers={"User-Agent": "GammaAgent/1.0"})
-                    with urllib.request.urlopen(req, timeout=10) as response:
-                        wiki_data = json.loads(response.read().decode())
-                        if wiki_data.get("type") != "not-found":
-                            output = f"🔍 **תוצאות חיפוש עבור:** {query}\n\n"
-                            output += f"📝 **{wiki_data.get('title', 'מידע')}:**\n"
-                            output += wiki_data.get("extract", "")[:600] + "\n"
-                            if wiki_data.get("content_urls", {}).get("desktop", {}).get("page"):
-                                output += f"\n📎 [ויקיפדיה]({wiki_data['content_urls']['desktop']['page']})\n"
-                            tools_used.append("Web search (Wikipedia)")
-                            return output
-                except:
-                    pass
+                req = urllib.request.Request(wiki_url, headers={"User-Agent": "GammaAgent/1.0"})
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    wiki_data = json.loads(response.read().decode())
+                    if wiki_data.get("type") != "not-found":
+                        output = f"🔍 **תוצאות חיפוש עבור:** {query}\n\n"
+                        output += f"📝 **{wiki_data.get('title', 'מידע')}:**\n"
+                        output += wiki_data.get("extract", "")[:600] + "\n"
+                        if wiki_data.get("content_urls", {}).get("desktop", {}).get("page"):
+                            output += f"\n📎 [ויקיפדיה]({wiki_data['content_urls']['desktop']['page']})\n"
+                        tools_used.append("Web search (Wikipedia)")
+                        return output
+            except:
+                pass
             
-            # Then try DuckDuckGo API with original query
-            encoded_query = urllib.parse.quote(query)
-            api_url = f"https://api.duckduckgo.com/?q={encoded_query}&format=json&no_html=1"
-            
-            r = subprocess.run(
-                f"curl -sL --max-time 10 '{api_url}'",
-                shell=True, capture_output=True, text=True, timeout=15
-            )
-            
-            if r.stdout:
-                data = json.loads(r.stdout)
+            # Try DuckDuckGo
+            try:
+                encoded_query = urllib.parse.quote(search_q)
+                api_url = f"https://api.duckduckgo.com/?q={encoded_query}&format=json&no_html=1"
                 
-                heading = data.get("Heading", "")
-                abstract = data.get("AbstractText", "")
-                abstract_url = data.get("AbstractURL", "")
-                results = data.get("RelatedTopics", [])
+                r = subprocess.run(
+                    f"curl -sL --max-time 10 '{api_url}'",
+                    shell=True, capture_output=True, text=True, timeout=15
+                )
                 
-                output = "🔍 **תוצאות חיפוש עבור:** " + query + "\n\n"
-                
-                if heading or abstract:
-                    output += f"📝 **{heading or 'מידע'}:**\n"
-                    if abstract:
-                        output += abstract[:500] + ("..." if len(abstract) > 500 else "") + "\n"
-                    if abstract_url:
-                        output += f"\n📎 [קישור]({abstract_url})\n"
-                
-                if results:
-                    output += "\n📋 **תוצאות נוספות:**\n"
-                    for i, r_item in enumerate(results[:5], 1):
-                        text = r_item.get("Text", "")
-                        if text:
-                            clean_text = re.sub(r'<[^>]+>', '', text)
-                            output += f"{i}. {clean_text[:150]}...\n"
-                
-                if not heading and not abstract and not results:
-                    output += "לא מצאתי מידע מובהק. נסה ניסוח אחר."
-                
-                tools_used.append("Web search (DuckDuckGo)")
-                return output
-        except Exception as e:
-            print(f"Search error: {e}", flush=True)
+                if r.stdout:
+                    data = json.loads(r.stdout)
+                    
+                    heading = data.get("Heading", "")
+                    abstract = data.get("AbstractText", "")
+                    abstract_url = data.get("AbstractURL", "")
+                    results = data.get("RelatedTopics", [])
+                    
+                    if heading or abstract or results:
+                        output = "🔍 **תוצאות חיפוש עבור:** " + query + "\n\n"
+                        
+                        if heading or abstract:
+                            output += f"📝 **{heading or 'מידע'}:**\n"
+                            if abstract:
+                                output += abstract[:500] + ("..." if len(abstract) > 500 else "") + "\n"
+                            if abstract_url:
+                                output += f"\n📎 [קישור]({abstract_url})\n"
+                        
+                        if results:
+                            output += "\n📋 **תוצאות נוספות:**\n"
+                            for i, r_item in enumerate(results[:5], 1):
+                                text = r_item.get("Text", "")
+                                if text:
+                                    clean_text = re.sub(r'<[^>]+>', '', text)
+                                    output += f"{i}. {clean_text[:150]}...\n"
+                        
+                        tools_used.append("Web search (DuckDuckGo)")
+                        return output
+            except:
+                pass
         
         return "🔍 מצטער, לא הצלחתי לחפש באינטרנט. נסה שאלה אחרת."
     
