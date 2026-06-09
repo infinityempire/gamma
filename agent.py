@@ -175,6 +175,14 @@ def handle_command(text, text_lower=None, thoughts=None, tools_used=None):
         clean_query = query
         # Use ordered list for proper translations
         translations = [
+            # AI tools names
+            ("LangChain", "LangChain"),
+            ("AutoGPT", "AutoGPT"),
+            ("CrewAI", "CrewAI"),
+            ("AutoGen", "AutoGen"),
+            ("LlamaIndex", "LlamaIndex"),
+            ("Semantic Kernel", "Semantic Kernel"),
+            # Phrases
             ("כלי אוטומציה של בינה מלאכותית", "AI automation tools"),
             ("כלי אוטומציה", "AI automation tools"),
             ("בינה מלאכותית", "AI"),
