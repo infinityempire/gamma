@@ -85,6 +85,15 @@ jobs:
           echo "Type: $(cat state.json | python3 -c 'import sys,json; print(json.load(sys.stdin).get("task_type","N/A"))')"
           echo "Tools used: $(cat state.json | python3 -c 'import sys,json; d=json.load(sys.stdin); print(", ".join(d.get("tools_used",[])) or "none")')"
 
+      - name: Upload Interface Status
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: interface-status
+          path: ${{ github.workspace }}/interface_status.json
+          retention-days: 1
+          overwrite: true
+
       - name: Upload Results
         if: always()
         uses: actions/upload-artifact@v4
@@ -97,4 +106,5 @@ jobs:
             ${{ github.workspace }}/before_login.png
             ${{ github.workspace }}/after_login.png
             ${{ github.workspace }}/browser_screenshot.png
+            ${{ github.workspace }}/interface_status.json
           retention-days: 7
