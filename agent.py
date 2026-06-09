@@ -1,7 +1,15 @@
 import json
 import os
 import subprocess
+import re
 from datetime import datetime
+
+# Try to import Tavily for web search
+try:
+    from tavily import TavilyClient
+    TAVILY_AVAILABLE = True
+except ImportError:
+    TAVILY_AVAILABLE = False
 
 workspace = os.environ.get("GITHUB_WORKSPACE", ".")
 state_file = os.path.join(workspace, "state.json")
@@ -114,6 +122,75 @@ def handle_command(text, text_lower=None, thoughts=None, tools_used=None):
     
     if text_lower is None:
         text_lower = text.lower()
+    
+    # ==========================================
+    # WEB SEARCH - FULL CAPABILITY
+    # ==========================================
+    
+    search_patterns = ["חפש", "search", "google", "גוגל", "מצא", "find on web", "סרוק", "research", "who is", "מי זה", "what is", "מה זה", "5 הכי", "top 5", "הכי פופולרי", "popular"]
+    if any(p in text_lower for p in search_patterns) or ("מה ה" in text_lower and any(x in text_lower for x in ["כלי", "tool", "אפליקציה", "app", "software", "platform"])):
+        
+        query = text
+        for p in ["חפש", "search for", "find on", "google", "מצא", "סרוק", "research", "מה ה", "who is", "מי זה", "what is", "מה זה"]:
+            query = query.replace(p, "")
+        query = query.strip()
+        
+        if not query:
+            return "❌ לא הבנתי מה לחפש. תגיד לי מה לחפש."
+        
+        thoughts.append("מחפש באינטרנט: " + query)
+        
+        # Try Tavily if available
+        if TAVILY_AVAILABLE:
+            try:
+                tavily = TavilyClient(api_key=os.environ.get("TAVILY_API_KEY", ""))
+                result = tavily.search(query=query, max_results=10, include_answer=True)
+                
+                answer = result.get("answer", "")
+                results = result.get("results", [])
+                
+                output = "🔍 **תוצאות חיפוש עבור:** " + query + "\n\n"
+                
+                if answer:
+                    output += "📝 **תשובה:**\n" + answer + "\n\n"
+                
+                output += "📋 **מקורות:**\n"
+                for i, r in enumerate(results[:5], 1):
+                    title = r.get("title", "ללא כותרת")
+                    url = r.get("url", "")
+                    content = r.get("content", "")[:200]
+                    output += f"{i}. [{title}]({url})\n"
+                    if content:
+                        output += f"   └ {content}...\n"
+                
+                tools_used.append("Web search (Tavily)")
+                return output
+            except Exception as e:
+                print(f"Tavily error: {e}", flush=True)
+        
+        # Fallback: use subprocess with curl
+        try:
+            # Try using curl to search
+            search_url = f"https://html.duckduckgo.com/html/?q={query.replace(' ', '+')}"
+            r = subprocess.run(
+                f"curl -sL --max-time 10 '{search_url}' 2>/dev/null | grep -o '<a class=\"result__a\" href=\"[^\"]*\"[^>]*>[^<]*</a>' | head -5",
+                shell=True, capture_output=True, text=True, timeout=15
+            )
+            
+            results = r.stdout.strip()
+            if results:
+                output = "🔍 **תוצאות חיפוש עבור:** " + query + "\n\n"
+                for line in results.split('\n')[:5]:
+                    match = re.search(r'>([^<]+)</a>', line)
+                    if match:
+                        output += "• " + match.group(1) + "\n"
+                
+                tools_used.append("Web search")
+                return output + "\n\n💡 *לתוצאות מפורטות יותר, שאל שאלה ספציפית.*"
+        except Exception as e:
+            pass
+        
+        return "🔍 מצטער, לא הצלחתי לחפש באינטרנט. נסה שאלה אחרת."
     
     # ==========================================
     # FILE OPERATIONS - Natural Language
