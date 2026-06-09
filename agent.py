@@ -446,12 +446,20 @@ def handle_general(text):
 
 print("\n--- THINKING ---", flush=True)
 
+# DETECT INPUT TYPE - ORDER MATTERS!
+search_patterns = ["who is", "what is", "מי זה", "מה זה", "חפש", "search", "google", "גוגל", "top", "best", "2026", "פופולרי", "popular", "tools", "list of", "סרוק"]
+
 # Define text_lower for use in main logic
 text_lower = original_task.lower()
 
 # DETECT INPUT TYPE - Check commands BEFORE questions!
 version_patterns = ["מה גרסת", "npm version", "גרסת npm", "גרסת node", "node version", "גרסת python", "python version", "גרסת git", "git version"]
 command_patterns = ["צור קובץ", "create file", "תיצור", "צור טקסט", "list files", "מה יש", "אילו קבצים", "git status"]
+
+if any(p in text_lower for p in search_patterns):
+    print("🔍 Detected: WEB SEARCH", flush=True)
+    thoughts.append("זה חיפוש באינטרנט - אחפש עבורו")
+    response_text = handle_command(original_task, text_lower, thoughts, tools_used)
 
 # Check for version request FIRST
 if any(p in text_lower for p in version_patterns):
