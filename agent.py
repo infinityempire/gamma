@@ -168,27 +168,51 @@ def handle_command(text, text_lower=None, thoughts=None, tools_used=None):
             except Exception as e:
                 print(f"Tavily error: {e}", flush=True)
         
-        # Fallback: use subprocess with curl
+        # Fallback: use DuckDuckGo API (JSON)
         try:
-            # Try using curl to search
-            search_url = f"https://html.duckduckgo.com/html/?q={query.replace(' ', '+')}"
+            import urllib.parse
+            encoded_query = urllib.parse.quote(query)
+            api_url = f"https://api.duckduckgo.com/?q={encoded_query}&format=json&no_html=1"
+            
             r = subprocess.run(
-                f"curl -sL --max-time 10 '{search_url}' 2>/dev/null | grep -o '<a class=\"result__a\" href=\"[^\"]*\"[^>]*>[^<]*</a>' | head -5",
+                f"curl -sL --max-time 10 '{api_url}'",
                 shell=True, capture_output=True, text=True, timeout=15
             )
             
-            results = r.stdout.strip()
-            if results:
-                output = "🔍 **תוצאות חיפוש עבור:** " + query + "\n\n"
-                for line in results.split('\n')[:5]:
-                    match = re.search(r'>([^<]+)</a>', line)
-                    if match:
-                        output += "• " + match.group(1) + "\n"
+            if r.stdout:
+                import json
+                data = json.loads(r.stdout)
                 
-                tools_used.append("Web search")
-                return output + "\n\n💡 *לתוצאות מפורטות יותר, שאל שאלה ספציפית.*"
+                heading = data.get("Heading", "")
+                abstract = data.get("AbstractText", "")
+                abstract_url = data.get("AbstractURL", "")
+                results = data.get("RelatedTopics", [])
+                
+                output = "🔍 **תוצאות חיפוש עבור:** " + query + "\n\n"
+                
+                if heading or abstract:
+                    output += f"📝 **{heading or 'מידע'}:**\n"
+                    if abstract:
+                        output += abstract[:500] + ("..." if len(abstract) > 500 else "") + "\n"
+                    if abstract_url:
+                        output += f"\n📎 [קישור]({abstract_url})\n"
+                
+                if results:
+                    output += "\n📋 **תוצאות נוספות:**\n"
+                    for i, r in enumerate(results[:5], 1):
+                        text = r.get("Text", "")
+                        if text:
+                            # Clean HTML from text
+                            clean_text = re.sub(r'<[^>]+>', '', text)
+                            output += f"{i}. {clean_text[:150]}...\n"
+                
+                if not heading and not abstract and not results:
+                    output += "לא מצאתי מידע מובהק. נסה ניסוח אחר."
+                
+                tools_used.append("Web search (DuckDuckGo)")
+                return output
         except Exception as e:
-            pass
+            print(f"Search error: {e}", flush=True)
         
         return "🔍 מצטער, לא הצלחתי לחפש באינטרנט. נסה שאלה אחרת."
     
