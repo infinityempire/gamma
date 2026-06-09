@@ -128,3 +128,14 @@ jobs:
             ${{ github.workspace }}/interface_status.json
           retention-days: 7
           overwrite: true
+
+      - name: Upload Interface Status
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: interface-status
+          path: |
+            ${{ github.workspace }}/interface_status.json
+            ${{ github.workspace }}/response.txt
+          retention-days: 1
+          overwrite: true

@@ -735,6 +735,7 @@
             }
 
             try {
+                // 1. Get basic run status
                 const response = await fetch(
                     `https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/actions/runs/${currentRunId}`,
                     {
@@ -753,9 +754,10 @@
                 const run = await response.json();
                 updateStatus('running', `ריצה #${run.run_number}: ${run.status}`);
 
-                // Try to get status from artifacts
-                await fetchArtifacts();
+                // 2. Try to get REAL-TIME status from logs
+                await fetchStatusFromLogs();
 
+                // 3. Handle completion
                 if (run.status === 'completed') {
                     stopPolling();
                     if (run.conclusion === 'success') {
@@ -766,6 +768,34 @@
                 }
             } catch (error) {
                 console.error('Polling error:', error);
+            }
+        }
+
+        async function fetchStatusFromLogs() {
+            try {
+                // Fetch the logs for the current run
+                const response = await fetch(
+                    `https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/actions/runs/${currentRunId}/logs`,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/vnd.github+json'
+                        }
+                    }
+                );
+
+                if (!response.ok) return;
+
+                // The logs are returned as a redirect to a zip file
+                // For simplicity in this standalone version, we'll try to find the latest log markers
+                // by fetching the jobs and their logs individually if needed, 
+                // but a better way is to use the Artifacts if they are updated frequently.
+                // Since GitHub Artifacts are NOT real-time, we'll stick to logs or a dedicated status branch.
+                
+                // For now, let's also try fetching artifacts as a fallback
+                await fetchArtifacts();
+            } catch (e) {
+                console.error('Error fetching logs:', e);
             }
         }
 

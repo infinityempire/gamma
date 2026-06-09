@@ -73,7 +73,7 @@ response_text = ""
 # ==========================================
 
 def update_interface_status(phase, task_name, status, thought_process=""):
-    """Updates the interface_status.json file for real-time UI polling."""
+    """Updates the interface_status.json file and prints a log marker for real-time UI polling."""
     try:
         # Get current step info (with safe defaults)
         current_step = state.get("current_directive_step", 0) or 0
@@ -103,9 +103,21 @@ def update_interface_status(phase, task_name, status, thought_process=""):
             "last_error": state.get("last_error", ""),
             "timestamp": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
         }
+        # 1. Save to file
         with open(status_file, "w", encoding="utf-8") as f:
             json.dump(status_data, f, ensure_ascii=False, indent=2)
+            
+        # 2. Print special log marker for REAL-TIME UI parsing
+        print(f"\n::STATUS_UPDATE::{json.dumps(status_data, ensure_ascii=False)}::\n", flush=True)
+        
+        # 3. Print human readable status
         print(f"[{phase}] | [{task_name}] | [{status}] | {thought_process}", flush=True)
+        
+        # 4. Save response incrementally so UI can see it
+        if response_text:
+            with open(response_file, "w", encoding="utf-8") as f:
+                f.write(response_text)
+                
     except Exception as e:
         print(f"Error updating interface_status.json: {e}", flush=True)
 
@@ -568,6 +580,10 @@ def main():
                     state["completed_steps"] = completed_steps
                     state["current_step_name"] = step["action"]
                     save_state()
+                    
+                    # Also save response incrementally so UI can see it
+                    with open(response_file, "w", encoding="utf-8") as f:
+                        f.write(response_text)
                     
                     break
                 except Exception as e:
