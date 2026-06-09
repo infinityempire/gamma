@@ -174,8 +174,11 @@ def handle_command(text, text_lower=None, thoughts=None, tools_used=None):
         # Strategy 1: Clean the query - remove Hebrew, keep English
         clean_query = query
         translations = {
+            "אילון מאסק": "Elon Musk",
+            "אילון": "Elon",
+            "מאסק": "Musk",
             "כלי אוטומציה": "AI automation tools",
-            "בינה מלאכותית": "AI",
+            "בינה מלאכותית": "artificial intelligence",
             "פופולרי": "popular",
             "2026": "2026",
             "יוני": "June",
@@ -190,6 +193,10 @@ def handle_command(text, text_lower=None, thoughts=None, tools_used=None):
             "אילון מאסק": "Elon Musk",
             "אילון": "Elon",
             "מאסק": "Musk",
+            # Hebrew query patterns
+            "מה זה": "what is",
+            "מי זה": "who is",
+            "חפש": "search",
         }
         for heb, eng in translations.items():
             clean_query = clean_query.replace(heb, eng)
@@ -460,48 +467,52 @@ def handle_general(text):
 
 print("\n--- THINKING ---", flush=True)
 
-# DETECT INPUT TYPE - ORDER MATTERS!
-search_patterns = ["who is", "what is", "מי זה", "מה זה", "חפש", "search", "google", "גוגל", "top", "best", "2026", "פופולרי", "popular", "tools", "list of", "סרוק"]
-
 # Define text_lower for use in main logic
 text_lower = original_task.lower()
 
-# DETECT INPUT TYPE - ORDER MATTERS!
+# PATTERNS - ORDER MATTERS!
+search_patterns = ["who is", "what is", "מי זה", "מה זה", "חפש", "search", "google", "גוגל", "top", "best", "2026", "פופולרי", "popular", "tools", "list of", "סרוק", "5 הכי", "ranking"]
 version_patterns = ["מה גרסת", "npm version", "גרסת npm", "גרסת node", "node version", "גרסת python", "python version", "גרסת git", "git version"]
-command_patterns = ["צור קובץ", "create file", "תיצור", "צור טקסט", "list files", "מה יש", "אילו קבצים", "git status"]
-search_patterns = ["who is", "what is", "מי זה", "מה זה", "חפש", "search", "google", "גוגל", "top", "best", "2026", "פופולרי", "popular", "tools", "list of", "סרוק"]
+command_patterns = ["צור קובץ", "create file", "תיצור", "צור טקסט", "list files", "מה יש", "אילו קבצים", "git status", "תעדכן", "update"]
+git_patterns = ["commit", "push", "pull", "merge", "branch", "stash"]
 
-# 1. WEB SEARCH first
+# 1. WEB SEARCH FIRST - Most important for info queries
 if any(p in text_lower for p in search_patterns):
     print("🔍 Detected: WEB SEARCH", flush=True)
     thoughts.append("זה חיפוש באינטרנט - אחפש עבורו")
     response_text = handle_command(original_task, text_lower, thoughts, tools_used)
 
-# 2. Version check
+# 2. Git operations
+elif any(p in text_lower for p in git_patterns):
+    print("🔄 Detected: GIT OPERATION", flush=True)
+    thoughts.append("פעולת Git - מבצע")
+    response_text = handle_command(original_task, text_lower, thoughts, tools_used)
+
+# 3. Version check
 elif any(p in text_lower for p in version_patterns):
     print("📋 Detected: VERSION CHECK", flush=True)
     thoughts.append("זו בקשת גרסה - אבדוק את הגרסה")
     response_text = handle_command(original_task, text_lower, thoughts, tools_used)
 
-# 3. File/command operations
+# 4. File/command operations
 elif any(p in text_lower for p in command_patterns):
     print("⚡ Detected: COMMAND", flush=True)
     thoughts.append("זו פקודה - מבצע")
     response_text = handle_command(original_task, text_lower, thoughts, tools_used)
 
-# 4. Simple "run" command
+# 5. Simple "run" command
 elif "run " in text_lower:
     print("⚡ Detected: RUN COMMAND", flush=True)
     thoughts.append("פקודת run - מבצע")
     response_text = handle_command(original_task, text_lower, thoughts, tools_used)
 
-# 5. Questions
-elif any(q in original_task.lower() for q in ["מה", "איך", "למה", "היכן", "?", "what", "how", "why"]):
+# 6. Questions (ONLY if no search pattern matched)
+elif any(q in original_task.lower() for q in ["מה", "איך", "למה", "היכן", "?", "what", "how", "why"]) and not any(p in text_lower for p in search_patterns):
     print("🎯 Detected: QUESTION", flush=True)
     thoughts.append("זו שאלה - מחפש תשובה")
     response_text = handle_question(original_task)
 
-# 6. Default
+# 7. Default
 else:
     print("💬 Detected: GENERAL", flush=True)
     thoughts.append("הודעה כללית - מגיב")
@@ -530,10 +541,12 @@ with open(log_file, "a", encoding="utf-8") as f:
 
 # Detect task type for state
 is_version = any(p in text_lower for p in version_patterns)
+is_git = any(p in text_lower for p in git_patterns)
 is_command_task = any(p in text_lower for p in command_patterns) or "run " in text_lower
 is_question_task = any(q in original_task.lower() for q in ["מה", "איך", "למה", "מי", "היכן", "?", "what", "how", "why", "who"])
+is_search_task = any(p in text_lower for p in search_patterns)
 
-task_type = "version" if is_version else "command" if is_command_task else "question" if is_question_task else "general"
+task_type = "search" if is_search_task else "git" if is_git else "version" if is_version else "command" if is_command_task else "question" if is_question_task else "general"
 
 print("\n--- FINAL ---", flush=True)
 print(f"Type: {task_type}", flush=True)
