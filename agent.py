@@ -452,45 +452,42 @@ search_patterns = ["who is", "what is", "מי זה", "מה זה", "חפש", "sea
 # Define text_lower for use in main logic
 text_lower = original_task.lower()
 
-# DETECT INPUT TYPE - Check commands BEFORE questions!
+# DETECT INPUT TYPE - ORDER MATTERS!
 version_patterns = ["מה גרסת", "npm version", "גרסת npm", "גרסת node", "node version", "גרסת python", "python version", "גרסת git", "git version"]
 command_patterns = ["צור קובץ", "create file", "תיצור", "צור טקסט", "list files", "מה יש", "אילו קבצים", "git status"]
+search_patterns = ["who is", "what is", "מי זה", "מה זה", "חפש", "search", "google", "גוגל", "top", "best", "2026", "פופולרי", "popular", "tools", "list of", "סרוק"]
 
+# 1. WEB SEARCH first
 if any(p in text_lower for p in search_patterns):
     print("🔍 Detected: WEB SEARCH", flush=True)
     thoughts.append("זה חיפוש באינטרנט - אחפש עבורו")
     response_text = handle_command(original_task, text_lower, thoughts, tools_used)
 
-# Check for version request FIRST
-if any(p in text_lower for p in version_patterns):
+# 2. Version check
+elif any(p in text_lower for p in version_patterns):
     print("📋 Detected: VERSION CHECK", flush=True)
     thoughts.append("זו בקשת גרסה - אבדוק את הגרסה")
     response_text = handle_command(original_task, text_lower, thoughts, tools_used)
-    
-# Check for file/command operations SECOND
+
+# 3. File/command operations
 elif any(p in text_lower for p in command_patterns):
     print("⚡ Detected: COMMAND", flush=True)
     thoughts.append("זו פקודה - מבצע")
     response_text = handle_command(original_task, text_lower, thoughts, tools_used)
 
-# THEN check for simple "run" command
+# 4. Simple "run" command
 elif "run " in text_lower:
     print("⚡ Detected: RUN COMMAND", flush=True)
     thoughts.append("פקודת run - מבצע")
     response_text = handle_command(original_task, text_lower, thoughts, tools_used)
 
-# Check for WEB SEARCH before questions (things like "who is", "what is", "מי זה", etc.)
-elif any(p in text_lower for p in ["who is", "what is", "מי זה", "מה זה", "חפש", "search", "google", "גוגל", "top", "best", "2026", "פופולרי", "popular ai tools", "list of", "tools"]):
-    print("🔍 Detected: WEB SEARCH", flush=True)
-    thoughts.append("זה חיפוש באינטרנט - אחפש עבורו")
-    response_text = handle_command(original_task, text_lower, thoughts, tools_used)
-    
-# FINALLY check for questions
+# 5. Questions
 elif any(q in original_task.lower() for q in ["מה", "איך", "למה", "היכן", "?", "what", "how", "why"]):
     print("🎯 Detected: QUESTION", flush=True)
     thoughts.append("זו שאלה - מחפש תשובה")
     response_text = handle_question(original_task)
-    
+
+# 6. Default
 else:
     print("💬 Detected: GENERAL", flush=True)
     thoughts.append("הודעה כללית - מגיב")
