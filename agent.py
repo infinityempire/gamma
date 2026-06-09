@@ -176,13 +176,15 @@ def handle_command(text, text_lower=None, thoughts=None, tools_used=None):
     # VERSION CHECKS - Natural Language
     # ==========================================
     
+    # Order matters: check SPECIFIC patterns BEFORE generic "מה גרסת"
     version_patterns = [
-        ("מה גרסת", "npm"), ("npm version", "npm"), ("גרסת npm", "npm"),
-        ("מה גרסת node", "node"), ("node version", "node"), ("גרסת node", "node"),
-        ("מה גרסת python", "python"), ("python version", "python"), ("גרסת python", "python"),
-        ("מה גרסת git", "git"), ("git version", "git"), ("גרסת git", "git"),
+        ("גרסת npm", "npm"), ("npm version", "npm"),
+        ("גרסת node", "node"), ("node version", "node"),
+        ("גרסת python", "python"), ("python version", "python"),
+        ("גרסת git", "git"), ("git version", "git"),
+        # Generic "what version" - check LAST, default to npm
+        ("מה גרסת", "npm"),
     ]
-    
     for pattern, tool in version_patterns:
         if pattern in text_lower:
             cmd_map = {"npm": "npm --version", "node": "node --version", 

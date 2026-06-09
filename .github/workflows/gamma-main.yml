@@ -57,7 +57,7 @@ jobs:
             cat response.txt
           fi
           echo ""
-          echo "Status: $(cat state.json | grep status | head -1 | cut -d'\"' -f4)"
+          echo "Status: $(cat state.json | python3 -c 'import sys,json; print(json.load(sys.stdin).get("status","N/A"))')"
       - name: Upload
         if: always()
         uses: actions/upload-artifact@v4
