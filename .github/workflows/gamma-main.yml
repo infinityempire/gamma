@@ -89,15 +89,64 @@ jobs:
 
       - name: Summary
         run: |
-          echo "=== GAMMA AGENT v2.0 COMPLETE ==="
+          # Use GitHub Actions output formatting
+          echo "## 🤖 Gamma Agent v2.0 - סיכום" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Get status from state.json
+          STATUS=$(python3 -c "import json; d=json.load(open('${{ github.workspace }}/state.json')); print(d.get('status', 'unknown'))")
+          CURRENT_STEP=$(python3 -c "import json; d=json.load(open('${{ github.workspace }}/state.json')); print(d.get('current_directive_step', 0))")
+          TOTAL_STEPS=$(python3 -c "import json; d=json.load(open('${{ github.workspace }}/state.json')); print(len(d.get('directive_plan', [])))")
+          
+          if [ "$STATUS" = "completed" ]; then
+            echo "✅ **סטטוס: הושלם בהצלחה!**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **סטטוס: $STATUS**" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**שלבים שהושלמו:** $CURRENT_STEP / $TOTAL_STEPS" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Show completed steps if available
+          COMPLETED_STEPS=$(python3 -c "
+import json
+d=json.load(open('${{ github.workspace }}/interface_status.json'))
+steps = d.get('completed_steps', [])
+if steps:
+    print('| שלב | סטטוס |')
+    print('|-----|-------|')
+    for s in steps:
+        print(f'| {s} | ✅ |')
+else:
+    print('אין מידע על שלבים')
+")
+          echo "$COMPLETED_STEPS" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Progress bar
+          PROGRESS=$(python3 -c "import json; d=json.load(open('${{ github.workspace }}/interface_status.json')); print(d.get('progress_percent', 0))")
+          BAR_LEN=20
+          FILLED=$((PROGRESS * BAR_LEN / 100))
+          EMPTY=$((BAR_LEN - FILLED))
+          printf "**התקדמות:** [%s%s] %d%%\n" "$(printf '#%.0s' $(seq 1 $FILLED))" "$(printf '-%.0s' $(seq 1 $EMPTY))" $PROGRESS >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Print to console as well
+          echo "=========================================="
+          echo "📋 GAMMA AGENT v2.0 - תוצאות"
+          echo "=========================================="
           if [ -f response.txt ]; then
             echo ""
+            echo "### תוצאות המשימה:"
             cat response.txt
           fi
           echo ""
-          echo "Status: $(cat state.json | python3 -c 'import sys,json; print(json.load(sys.stdin).get("status","N/A"))')"
-          echo "Type: $(cat state.json | python3 -c 'import sys,json; print(json.load(sys.stdin).get("task_type","N/A"))')"
-          echo "Tools used: $(cat state.json | python3 -c 'import sys,json; d=json.load(sys.stdin); print(", ".join(d.get("tools_used",[])) or "none")')"
+          echo "=========================================="
+          echo "✅ סטטוס: $STATUS"
+          echo "📊 שלבים: $CURRENT_STEP / $TOTAL_STEPS"
+          echo "📈 התקדמות: $PROGRESS%"
+          echo "=========================================="
 
       - name: Upload Interface Status
         if: always()

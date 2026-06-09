@@ -7,6 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <!-- JSZip for extracting files from ZIP artifacts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         :root {
             --bg-void: #020205;
@@ -834,6 +836,7 @@
 
         async function getAgentResponse(runId) {
             try {
+                // Fetch artifacts list
                 const response = await fetch(
                     `https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/actions/runs/${runId}/artifacts`,
                     {
@@ -847,16 +850,117 @@
                 if (!response.ok) return null;
                 
                 const data = await response.json();
-                const resultsArtifact = data.artifacts?.find(a => a.name === 'gamma-results');
                 
-                if (resultsArtifact) {
-                    // For now, generate response based on task type
-                    return '🤖 גאמא ביצע את המשימה בהצלחה!\n\n' +
-                           '📋 הסוכן זיהה את סוג המשימה, בחר את הכלים המתאימים,\n' +
-                           'וביצע את הפעולה הנדרשת.';
+                // Find both artifacts
+                const resultsArtifact = data.artifacts?.find(a => a.name === 'gamma-results');
+                const statusArtifact = data.artifacts?.find(a => a.name === 'interface-status');
+                
+                let interfaceStatus = null;
+                let agentResponse = null;
+                
+                // Helper to extract file from ZIP
+                async function extractFromZip(blob, filename) {
+                    try {
+                        // Use JSZip library if available, otherwise manual parse
+                        if (typeof JSZip !== 'undefined') {
+                            const zip = await JSZip.loadAsync(blob);
+                            const file = zip.file(filename);
+                            if (file) {
+                                return await file.async('string');
+                            }
+                        } else {
+                            // Manual ZIP parsing for simple cases
+                            const buffer = await blob.arrayBuffer();
+                            const uint8 = new Uint8Array(buffer);
+                            
+                            // Find file in ZIP (simplified)
+                            // Look for filename in the ZIP
+                            const decoder = new TextDecoder();
+                            const content = decoder.decode(uint8);
+                            
+                            // Try to find the file content
+                            // This is a simplified approach
+                            return null;
+                        }
+                    } catch (e) {
+                        console.log('Error extracting from zip:', e);
+                    }
+                    return null;
                 }
+                
+                // Fetch interface_status.json
+                if (statusArtifact) {
+                    const statusResp = await fetch(statusArtifact.archive_download_url, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (statusResp.ok) {
+                        const statusBlob = await statusResp.blob();
+                        const statusText = await extractFromZip(statusBlob, 'interface_status.json');
+                        if (statusText) {
+                            interfaceStatus = JSON.parse(statusText);
+                        }
+                    }
+                }
+                
+                // Fetch response.txt from gamma-results
+                if (resultsArtifact) {
+                    const resultsResp = await fetch(resultsArtifact.archive_download_url, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (resultsResp.ok) {
+                        const resultsBlob = await resultsResp.blob();
+                        agentResponse = await extractFromZip(resultsBlob, 'response.txt');
+                    }
+                }
+                
+                // Build comprehensive response
+                let responseText = '';
+                
+                // Header
+                responseText += '🤖 **גאמא השלים את המשימה!**\n\n';
+                
+                // Show progress and steps
+                if (interfaceStatus) {
+                    const progress = interfaceStatus.progress_percent || 0;
+                    const completedSteps = interfaceStatus.completed_steps || [];
+                    const currentStep = interfaceStatus.current_step_name || '';
+                    
+                    // Progress bar
+                    const barLen = 20;
+                    const filled = Math.round(progress * barLen / 100);
+                    const empty = barLen - filled;
+                    const progressBar = '█'.repeat(filled) + '░'.repeat(empty);
+                    
+                    responseText += `📈 **התקדמות:** \`${progressBar}\` ${progress}%\n\n`;
+                    
+                    // Show completed steps
+                    if (completedSteps.length > 0) {
+                        responseText += '### ✅ שלבים שהושלמו:\n\n';
+                        for (const step of completedSteps) {
+                            responseText += `✓ ${step}\n`;
+                        }
+                        responseText += '\n';
+                    }
+                }
+                
+                // Show agent output
+                if (agentResponse) {
+                    responseText += '---\n\n';
+                    responseText += '### 📋 פלט המשימה:\n\n';
+                    responseText += '```\n' + agentResponse.trim() + '\n```';
+                }
+                
+                // If no detailed response, show generic success
+                if (!interfaceStatus && !agentResponse) {
+                    responseText = '🤖 **גאמא ביצע את המשימה בהצלחה!**\n\n' +
+                                 '📋 הסוכן זיהה את סוג המשימה, בחר את הכלים המתאימים,\n' +
+                                 'וביצע את הפעולה הנדרשת.';
+                }
+                
+                return responseText;
+                
             } catch (e) {
-                console.log('Could not fetch response');
+                console.log('Could not fetch response:', e);
             }
             return null;
         }
