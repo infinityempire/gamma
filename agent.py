@@ -168,9 +168,31 @@ def handle_command(text, text_lower=None, thoughts=None, tools_used=None):
             except Exception as e:
                 print(f"Tavily error: {e}", flush=True)
         
-        # Fallback: use DuckDuckGo API (JSON)
+        # Fallback: use Wikipedia API + DuckDuckGo
         try:
             import urllib.parse
+            import urllib.request
+            
+            # First try Wikipedia
+            wiki_query = urllib.parse.quote(query.replace("2026", "").replace("ב2026", "").replace("יוני", "").strip())
+            wiki_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{wiki_query}"
+            
+            try:
+                req = urllib.request.Request(wiki_url, headers={"User-Agent": "GammaAgent/1.0"})
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    wiki_data = json.loads(response.read().decode())
+                    if wiki_data.get("type") != "not-found":
+                        output = f"🔍 **תוצאות חיפוש עבור:** {query}\n\n"
+                        output += f"📝 **{wiki_data.get('title', 'מידע')}:**\n"
+                        output += wiki_data.get("extract", "")[:600] + "\n"
+                        if wiki_data.get("content_urls", {}).get("desktop", {}).get("page"):
+                            output += f"\n📎 [ויקיפדיה]({wiki_data['content_urls']['desktop']['page']})\n"
+                        tools_used.append("Web search (Wikipedia)")
+                        return output
+            except:
+                pass
+            
+            # Then try DuckDuckGo API
             encoded_query = urllib.parse.quote(query)
             api_url = f"https://api.duckduckgo.com/?q={encoded_query}&format=json&no_html=1"
             
@@ -180,7 +202,6 @@ def handle_command(text, text_lower=None, thoughts=None, tools_used=None):
             )
             
             if r.stdout:
-                import json
                 data = json.loads(r.stdout)
                 
                 heading = data.get("Heading", "")
@@ -199,10 +220,9 @@ def handle_command(text, text_lower=None, thoughts=None, tools_used=None):
                 
                 if results:
                     output += "\n📋 **תוצאות נוספות:**\n"
-                    for i, r in enumerate(results[:5], 1):
-                        text = r.get("Text", "")
+                    for i, r_item in enumerate(results[:5], 1):
+                        text = r_item.get("Text", "")
                         if text:
-                            # Clean HTML from text
                             clean_text = re.sub(r'<[^>]+>', '', text)
                             output += f"{i}. {clean_text[:150]}...\n"
                 
