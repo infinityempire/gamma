@@ -271,7 +271,9 @@ def handle_alias_indexing(text):
 # MAIN EXECUTION ENGINE
 # ==========================================
 
-def execute_command(cmd):
+def execute_command(cmd, depth=0):
+    if depth > 5: return f"⚠️ שגיאה: עומק רקורסיה גדול מדי עבור הקיצור {cmd}"
+    
     cmd_upper = cmd.strip().upper()
     aliases = state.get("aliases", {})
     
@@ -279,17 +281,18 @@ def execute_command(cmd):
     if cmd_upper in aliases:
         real_cmd = aliases[cmd_upper]
         thoughts.append(f"Executing alias: {cmd_upper} -> {real_cmd}")
-        return execute_command(real_cmd)
+        res = execute_command(real_cmd, depth + 1)
+        return res if res else f"✅ בוצע: {real_cmd}"
 
     cmd_lower = cmd.lower()
     
     # Handle combined commands
     if " & " in cmd_lower:
         parts = cmd.split(" & ")
-        return "\n".join([execute_command(p.strip()) for p in parts])
+        return "\n".join([execute_command(p.strip(), depth + 1) for p in parts])
     if " and " in cmd_lower:
         parts = cmd.split(" and ")
-        return "\n".join([execute_command(p.strip()) for p in parts])
+        return "\n".join([execute_command(p.strip(), depth + 1) for p in parts])
     
     # Core Keywords Detection
     if any(x in cmd_lower for x in ["sync-state", "daily sync", "sync memory"]): return handle_sync_state()
@@ -334,25 +337,30 @@ def main():
         plan = state["directive_plan"]
         step_idx = state["current_directive_step"]
         
-        if step_idx < len(plan):
+        while step_idx < len(plan):
             step = plan[step_idx]
             update_interface_status("EXECUTION", step["action"], "Running", f"Executing step {step_idx+1}/{len(plan)}")
             
             # Execute with self-healing (retry logic)
+            step_success = False
             for attempt in range(3):
                 try:
                     res = execute_command(step["command"])
                     response_text += f"\n### Step {step_idx+1}: {step['action']}\n{res}\n"
-                    state["current_directive_step"] += 1
-                    save_state()
+                    step_success = True
                     break
                 except Exception as e:
                     if attempt == 2:
                         response_text += f"\n❌ Step {step_idx+1} failed after 3 attempts: {e}\n"
-                        state["current_directive_step"] += 1
-                        save_state()
+            
+            step_idx += 1
+            state["current_directive_step"] = step_idx
+            save_state()
+            
+            if not step_success:
+                break
         else:
-            response_text = "✅ כל שלבי ההנחיה הושלמו."
+            response_text += "\n✅ כל שלבי ההנחיה הושלמו."
             state["directive_plan"] = None
             save_state()
     else:

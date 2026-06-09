@@ -1,9 +1,1 @@
-✅ **הקיצורים (Aliases) אונדקסו בהצלחה:**
-
-• `MORNING`: Execute Daily Sync & Status Report
-• `LEADS`: Process Delta Agent leads and generate summary
-• `MAINTAIN`: Perform system cleanup, security audit, and state archive
-• `STATUS`: Display phase, current task, and thought process
-• `EMERGENCY`: Secure state, archive progress, and halt all tasks
-
-כעת תוכל להשתמש בהם ישירות!
+✅ כל שלבי ההנחיה הושלמו.
