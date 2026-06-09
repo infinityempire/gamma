@@ -434,7 +434,7 @@ elif "run " in text_lower:
     response_text = handle_command(original_task, text_lower, thoughts, tools_used)
 
 # Check for WEB SEARCH before questions (things like "who is", "what is", "מי זה", etc.)
-elif any(p in text_lower for p in ["who is", "what is", "מי זה", "מה זה", "חפש", "search", "google", "גוגל", "top 5", "הכי פופולרי", "popular ai tools"]):
+elif any(p in text_lower for p in ["who is", "what is", "מי זה", "מה זה", "חפש", "search", "google", "גוגל", "top", "2026", "פופולרי", "popular ai tools", "list of"]):
     print("🔍 Detected: WEB SEARCH", flush=True)
     thoughts.append("זה חיפוש באינטרנט - אחפש עבורו")
     response_text = handle_command(original_task, text_lower, thoughts, tools_used)
