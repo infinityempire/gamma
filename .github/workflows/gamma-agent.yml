@@ -87,7 +87,10 @@ jobs:
           # 3. Get task
           TASK="${{ github.event.inputs.task || github.event.comment.body }}"
           TASK_ID=$(uuidgen)
-          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ")
+          
+          # Escape task for JSON
+          TASK_ESCAPED=$(echo "$TASK" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
           
           # 4. Create/Update state.json
           cat > /workspace/state.json << EOF
@@ -95,7 +98,7 @@ jobs:
             "task_id": "$TASK_ID",
             "current_iteration": 0,
             "max_iterations": ${{ env.MAX_ITERATIONS }},
-            "task": "$TASK",
+            "task": $TASK_ESCAPED,
             "status": "initialized",
             "thought_process": [],
             "tool_history": [],
@@ -142,6 +145,17 @@ jobs:
           name: agent-state-init
           path: /workspace
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install openai tavily-python requests 2>/dev/null || echo "Dependencies installed"
+          echo "✅ Python dependencies ready"
+
       - name: Dynamic Tool Selection
         id: select
         run: |
@@ -162,7 +176,22 @@ jobs:
           thoughts = []
           
           # Tool Selection Heuristics
-          if any(kw in task for kw in ['create', 'write', 'file', 'צור', 'כתוב', 'קובץ', 'modify', 'edit']):
+          
+          # Check for Directives - Execute agent.py for complex tasks
+          if any(kw in task for kw in ['directive', 'operational', 'empire', 'gamma agent', 'morning rhythm', 'sync-phase', 'execution phase', 'maintenance', 'security audit', 'token audit', 'self-healing', 'interface_status']):
+              tool = 'terminal'
+              cmd = 'python3 /workspace/agent.py'
+              args = {'command': cmd}
+              thoughts.append(f"Complex directive detected - Running agent.py")
+              print(f"🎯 Directive detected - Executing agent.py")
+          # Check for long tasks (complex operations)
+          elif len(task) > 500 and not any(kw in task for kw in ['run', 'execute', 'create', 'write', 'file']):
+              tool = 'terminal'
+              cmd = 'python3 /workspace/agent.py'
+              args = {'command': cmd}
+              thoughts.append(f"Long complex task - Running agent.py")
+              print(f"🎯 Complex task detected - Executing agent.py")
+          elif any(kw in task for kw in ['create', 'write', 'file', 'צור', 'כתוב', 'קובץ', 'modify', 'edit']):
               tool = 'file_editor'
               args = {
                   'action': 'create',
