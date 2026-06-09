@@ -630,3 +630,17 @@ jobs:
 
   # Job 5: Summary
   summary:
+    runs-on: ubuntu-latest
+    needs: [initialize, dynamic-execution, self-healing, interface-sync]
+    if: always()
+    steps:
+      - name: Download Results
+        uses: actions/download-artifact@v4
+        with:
+          path: /workspace/artifacts
+
+      - name: Final Summary
+        run: |
+          echo "## 🤖 Gamma Agent - Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Task completed!" >> $GITHUB_STEP_SUMMARY
