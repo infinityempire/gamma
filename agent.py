@@ -174,8 +174,11 @@ def handle_command(text, text_lower=None, thoughts=None, tools_used=None):
         # Strategy 1: Clean the query - remove Hebrew, keep English
         clean_query = query
         translations = {
+            "אילון מאסק": "Elon Musk",
+            "אילון": "Elon",
+            "מאסק": "Musk",
             "כלי אוטומציה": "AI automation tools",
-            "בינה מלאכותית": "AI",
+            "בינה מלאכותית": "artificial intelligence",
             "פופולרי": "popular",
             "2026": "2026",
             "יוני": "June",
@@ -186,6 +189,9 @@ def handle_command(text, text_lower=None, thoughts=None, tools_used=None):
             "את 5 הכלים": "top 5 AI tools",
             "את האינטרנט ו": "",
             "סרוק": "search for",
+            "מה זה": "what is",
+            "מי זה": "who is",
+            "חפש": "search",
         }
         for heb, eng in translations.items():
             clean_query = clean_query.replace(heb, eng)
