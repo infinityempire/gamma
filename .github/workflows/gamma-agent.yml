@@ -371,7 +371,7 @@ PYEOF
   self-healing:
     runs-on: ubuntu-latest
     needs: dynamic-execution
-    if: needs.dynamic-execution.outputs.success == 'false'
+    if: always()
     outputs:
       diagnosis: ${{ steps.diagnose.outputs.diagnosis }}
       repaired: ${{ steps.repair.outputs.repaired }}
