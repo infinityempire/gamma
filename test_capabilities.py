@@ -44,11 +44,11 @@ def run_test(test_name, test_description, test_command, expected_keywords=None):
         print(f"⏳ Running: {test_command[:60]}...")
         
         result = subprocess.run(
-            "cd /home/ubuntu/gamma && python3 agent.py",
-            shell=True,
+            ["python3", "agent.py"],
             capture_output=True,
             text=True,
             timeout=120,
+            cwd="/home/ubuntu/gamma",
             env={**os.environ, "GITHUB_WORKSPACE": "/home/ubuntu/gamma"}
         )
         

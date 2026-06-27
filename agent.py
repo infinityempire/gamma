@@ -193,8 +193,8 @@ def handle_browser_action(text, text_lower):
 
 def handle_system_monitor():
     try:
-        cpu = subprocess.run("cat /proc/loadavg", shell=True, capture_output=True, text=True).stdout.strip()
-        mem = subprocess.run("free -h", shell=True, capture_output=True, text=True).stdout.strip()
+        cpu = subprocess.run(["cat", "/proc/loadavg"], capture_output=True, text=True).stdout.strip()
+        mem = subprocess.run(["free", "-h"], capture_output=True, text=True).stdout.strip()
         tools_used.append("System Monitor")
         return f"📊 מצב מערכת:\nCPU: {cpu}\nMemory:\n{mem}"
     except:
@@ -222,7 +222,9 @@ def handle_status_report():
 
 def handle_maintenance_cleanup():
     try:
-        subprocess.run(f"rm -rf {os.path.join(workspace, '*.tmp')}", shell=True)
+        import glob
+        for tmp_file in glob.glob(os.path.join(workspace, '*.tmp')):
+            os.remove(tmp_file)
         thoughts.append("Maintenance-Cleanup: ניקוי קבצים זמניים.")
         return "✅ Maintenance-Cleanup הושלם."
     except:

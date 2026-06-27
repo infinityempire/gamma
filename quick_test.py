@@ -16,8 +16,9 @@ def test_capability(name, command, check_keywords):
             json.dump(state, f)
         
         result = subprocess.run(
-            "cd /home/ubuntu/gamma && python3 agent.py",
-            shell=True, capture_output=True, text=True, timeout=60,
+            ["python3", "agent.py"],
+            capture_output=True, text=True, timeout=60,
+            cwd="/home/ubuntu/gamma",
             env={**os.environ, "GITHUB_WORKSPACE": "/home/ubuntu/gamma"}
         )
         
